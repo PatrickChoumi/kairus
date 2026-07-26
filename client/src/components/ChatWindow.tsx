@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useChatStore } from '../store/chat';
+import { useAuthStore } from '../store/auth';
 import { getSocket } from '../store/socket';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
@@ -18,6 +19,7 @@ export default function ChatWindow({ chatId, onBack, showMobileList }: Props) {
   const lvRef = useRef<HTMLVideoElement>(null);
   const rvRef = useRef<HTMLVideoElement>(null);
 
+  const { user } = useAuthStore();
   const chat = chats.find(c => c.id === chatId);
   const msgs = chatId ? (messages[chatId] || []) : [];
 
@@ -119,12 +121,9 @@ export default function ChatWindow({ chatId, onBack, showMobileList }: Props) {
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
         {loading && <p className="text-center text-text-tertiary text-sm py-8">Loading...</p>}
-        {msgs.map(msg => {
-          const store = useChatStore.getState();
-          const activeChatObj = store.chats.find(c => c.id === chatId);
-          const isOwn = msg.sender_id === activeChatObj?.created_by;
-          return <MessageBubble key={msg.id} message={msg} isOwn={isOwn} chatMembers={chat.members} />;
-        })}
+        {msgs.map(msg => (
+          <MessageBubble key={msg.id} message={msg} isOwn={msg.sender_id === user?.id} chatMembers={chat.members} />
+        ))}
         {typing.length > 0 && <div className="text-xs text-text-tertiary italic px-3 py-1">{typing.join(', ')} typing...</div>}
         <div ref={bottomRef} />
       </div>

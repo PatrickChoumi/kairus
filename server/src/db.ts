@@ -54,11 +54,6 @@ export async function initDb() {
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (contact_id) REFERENCES users(id) ON DELETE CASCADE)`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS sessions (
-    token TEXT PRIMARY KEY, user_id TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
-
   db.run('CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at)');
   db.run('CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_members(user_id)');
   save();

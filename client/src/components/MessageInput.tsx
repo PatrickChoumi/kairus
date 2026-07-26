@@ -1,12 +1,14 @@
 import { useState, useRef, FormEvent, KeyboardEvent } from 'react';
 import { getSocket } from '../store/socket';
 import { useAuthStore } from '../store/auth';
+import StickerPicker from './StickerPicker';
 
 interface Props { chatId: string; }
 
 export default function MessageInput({ chatId }: Props) {
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [showStickers, setShowStickers] = useState(false);
   const { token } = useAuthStore();
   const typingTimeout = useRef<ReturnType<typeof setTimeout>>();
 
@@ -50,6 +52,12 @@ export default function MessageInput({ chatId }: Props) {
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
           <input type="file" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} />
         </label>
+        <div className="relative">
+          <button type="button" onClick={() => setShowStickers(!showStickers)} className="btn-ghost p-2.5 rounded-xl shrink-0">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </button>
+          {showStickers && <StickerPicker onSelect={(emoji) => { setText(t => t + emoji); setShowStickers(false); }} onClose={() => setShowStickers(false)} />}
+        </div>
         <input className="input text-sm py-2.5 flex-1" placeholder="Message..." value={text}
           onChange={e => { setText(e.target.value); emitTyping(); }} onKeyDown={onKey} />
         <button type="submit" className="btn-primary p-2.5 rounded-xl shrink-0" disabled={!text.trim() && !file}>

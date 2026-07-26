@@ -54,7 +54,6 @@ app.post('/api/auth/register', (req, res) => {
   const id = uuid();
   run('INSERT INTO users (id, phone, display_name, password_hash) VALUES (?,?,?,?)', [id, phone, display_name, bcrypt.hashSync(password, 10)]);
   const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: '30d' });
-  run('INSERT INTO sessions (token, user_id) VALUES (?,?)', [token, id]);
   res.json({ token, user: { id, phone, display_name } });
 });
 
@@ -63,7 +62,6 @@ app.post('/api/auth/login', (req, res) => {
   const user = get('SELECT * FROM users WHERE phone = ?', [phone]);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) return res.status(401).json({ error: 'Invalid' });
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
-  run('INSERT INTO sessions (token, user_id) VALUES (?,?)', [token, user.id]);
   res.json({ token, user: { id: user.id, phone: user.phone, username: user.username, display_name: user.display_name, avatar: user.avatar } });
 });
 
