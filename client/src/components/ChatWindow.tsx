@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useChatStore } from '../store/chat';
 import { useAuthStore } from '../store/auth';
-import { getSocket } from '../store/socket';
+import { getSocket, apiUrl } from '../store/socket';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
 
@@ -26,7 +26,7 @@ export default function ChatWindow({ chatId, onBack, showMobileList }: Props) {
   useEffect(() => {
     if (!chatId) return;
     setLoading(true);
-    fetch(`/api/chats/${chatId}/messages`).then(r => r.json()).then(m => { setMessages(chatId, m); setLoading(false); });
+    fetch(apiUrl(`/api/chats/${chatId}/messages`)).then(r => r.json()).then(m => { setMessages(chatId, m); setLoading(false); });
   }, [chatId]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs.length]);

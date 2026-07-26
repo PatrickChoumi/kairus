@@ -13,16 +13,19 @@ import { initDb, all, get, run } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const JWT_SECRET = process.env.JWT_SECRET || 'kairus-dev';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, { cors: { origin: '*', methods: ['GET', 'POST'] } });
+const io = new Server(httpServer, { cors: { origin: CORS_ORIGIN, methods: ['GET', 'POST'] } });
 
-app.use(cors());
+app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 
-const uploadsDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+app.get('/health', (_req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));
+
+const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 app.use('/uploads', express.static(uploadsDir));
 
 const upload = multer({
@@ -125,7 +128,7 @@ app.put('/api/messages/:id', auth, (req, res) => {
   const msg = get('SELECT * FROM messages WHERE id=? AND sender_id=?', [req.params.id, req.user.id]);
   if (!msg) return res.status(404).json({ error: 'Not found' });
   run('UPDATE messages SET content=?,edited=1,updated_at=datetime(\'now\') WHERE id=?', [req.body.content, req.params.id]);
-  const updated = get('SELECT m.*,u.display_name sender_name,u.username sender_avatar FROM messages m JOIN users u ON u.id=m.sender_id WHERE m.id=?', [req.params.id]);
+  const updated = get('SELECT m.*,u.display_name sender_name,u.username sender_username,u.avatar sender_avatar FROM messages m JOIN users u ON u.id=m.sender_id WHERE m.id=?', [req.params.id]);
   io.to(msg.chat_id).emit('edit_message', updated);
   res.json(updated);
 });

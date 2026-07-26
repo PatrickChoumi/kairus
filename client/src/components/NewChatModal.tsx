@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getSocket } from '../store/socket';
+import { getSocket, apiUrl } from '../store/socket';
 
 interface Props { onClose: () => void; }
 
@@ -11,7 +11,7 @@ export default function NewChatModal({ onClose }: Props) {
 
   useEffect(() => {
     if (search.length < 1) { setUsers([]); return; }
-    fetch(`/api/users/search?q=${search}`).then(r => r.json()).then(setUsers);
+    fetch(apiUrl(`/api/users/search?q=${search}`)).then(r => r.json()).then(setUsers);
   }, [search]);
 
   function startPrivate(userId: string) {

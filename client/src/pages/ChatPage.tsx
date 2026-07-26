@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
-import { getSocket, disconnectSocket } from '../store/socket';
+import { getSocket, disconnectSocket, apiUrl } from '../store/socket';
 import { useNotifications } from '../hooks/useNotifications';
 import ChatList from '../components/ChatList';
 import ChatWindow from '../components/ChatWindow';
@@ -20,7 +20,7 @@ export default function ChatPage() {
   useEffect(() => { requestPermission(); }, []);
 
   useEffect(() => {
-    fetch('/api/chats').then(r => r.json()).then(setChats);
+    fetch(apiUrl('/api/chats')).then(r => r.json()).then(setChats);
   }, []);
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export default function ChatPage() {
     });
     s.on('edit_message', editMessage);
     s.on('delete_message', ({ id, chat_id }) => deleteMessage(id, chat_id));
-    s.on('chat_created', () => fetch('/api/chats').then(r => r.json()).then(setChats));
+    s.on('chat_created', () => fetch(apiUrl('/api/chats')).then(r => r.json()).then(setChats));
     return () => { s.off('new_message'); s.off('edit_message'); s.off('delete_message'); s.off('chat_created'); };
   }, [activeChat, user?.id]);
 

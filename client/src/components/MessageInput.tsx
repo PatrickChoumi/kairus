@@ -1,5 +1,5 @@
 import { useState, useRef, FormEvent, KeyboardEvent } from 'react';
-import { getSocket } from '../store/socket';
+import { getSocket, apiUrl } from '../store/socket';
 import { useAuthStore } from '../store/auth';
 import StickerPicker from './StickerPicker';
 
@@ -26,12 +26,12 @@ export default function MessageInput({ chatId }: Props) {
     if (file) {
       const fd = new FormData();
       fd.append('file', file);
-      const up = await (await fetch('/api/media/upload', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })).json();
+      const up = await (await fetch(apiUrl('/api/media/upload'), { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd })).json();
       body.mediaPath = up.path;
       body.mediaType = up.type;
     }
 
-    await fetch(`/api/chats/${chatId}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+    await fetch(apiUrl(`/api/chats/${chatId}/messages`), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
     setText('');
     setFile(null);
     getSocket()?.emit('stop_typing', { chatId });

@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { useAuthStore } from '../store/auth';
+import { apiUrl } from '../store/socket';
 
 export default function LoginPage() {
   const { setAuth } = useAuthStore();
@@ -14,7 +15,7 @@ export default function LoginPage() {
     setErr('');
     const body = reg ? { phone, password: pass, display_name: name } : { phone, password: pass };
     try {
-      const r = await fetch(`/api/auth/${reg ? 'register' : 'login'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const r = await fetch(apiUrl(`/api/auth/${reg ? 'register' : 'login'}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json();
       if (!r.ok) return setErr(d.error);
       setAuth(d.token, d.user);
