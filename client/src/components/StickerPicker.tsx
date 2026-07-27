@@ -27,8 +27,8 @@ export default function StickerPicker({ onSelect, onClose }: Props) {
   }, []);
 
   return (
-    <div ref={ref} className="absolute bottom-full left-0 mb-2 w-72 bg-white dark:bg-dark-secondary rounded-2xl shadow-2xl border border-tertiary dark:border-dark-tertiary overflow-hidden z-50">
-      <div className="flex border-b border-tertiary dark:border-dark-tertiary">
+    <div ref={ref} className="absolute bottom-full left-0 mb-2 w-72 bg-white dark:bg-dark-secondary rounded-2xl shadow-2xl border border-surface-tertiary dark:border-dark-tertiary overflow-hidden z-50">
+      <div className="flex border-b border-surface-tertiary dark:border-dark-tertiary">
         <button onClick={() => setTab('emoji')} className={`flex-1 py-2 text-sm font-medium ${tab === 'emoji' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>Emoji</button>
         <button onClick={() => setTab('sticker')} className={`flex-1 py-2 text-sm font-medium ${tab === 'sticker' ? 'text-accent border-b-2 border-accent' : 'text-text-secondary'}`}>Stickers</button>
       </div>
@@ -36,13 +36,13 @@ export default function StickerPicker({ onSelect, onClose }: Props) {
         {tab === 'emoji' ? (
           <div className="grid grid-cols-8 gap-1">
             {EMOJIS.map(e => (
-              <button key={e} onClick={() => onSelect(e)} className="w-8 h-8 flex items-center justify-center hover:bg-tertiary dark:hover:bg-dark-tertiary rounded-lg text-lg">{e}</button>
+              <button key={e} onClick={() => onSelect(e)} className="w-8 h-8 flex items-center justify-center hover:bg-surface-tertiary dark:hover:bg-dark-tertiary rounded-lg text-lg">{e}</button>
             ))}
           </div>
         ) : (
           <div className="grid grid-cols-4 gap-2">
             {STICKERS.map(s => (
-              <button key={s.id} onClick={() => onSelect(s.emoji)} className="p-3 hover:bg-tertiary dark:hover:bg-dark-tertiary rounded-xl text-3xl">{s.emoji}</button>
+              <button key={s.id} onClick={() => onSelect(s.emoji)} className="p-3 hover:bg-surface-tertiary dark:hover:bg-dark-tertiary rounded-xl text-3xl">{s.emoji}</button>
             ))}
           </div>
         )}

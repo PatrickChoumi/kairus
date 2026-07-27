@@ -42,7 +42,7 @@ export default function MessageInput({ chatId }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="p-3 border-t border-tertiary dark:border-dark-tertiary">
+    <form onSubmit={handleSubmit} className="p-3 border-t border-surface-tertiary dark:border-dark-tertiary">
       {file && <div className="mb-2 flex items-center gap-2 text-sm text-text-secondary">
         <span className="truncate max-w-[200px]">{file.name}</span>
         <button type="button" onClick={() => setFile(null)} className="text-red-400 hover:text-red-300">x</button>

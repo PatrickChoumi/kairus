@@ -38,7 +38,7 @@ export default function MessageBubble({ message, isOwn, chatMembers }: Props) {
           </div>
         ) : (
           <div className="relative group/menu">
-            <div onClick={() => isOwn && setMenu(!menu)} className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${isOwn ? 'bg-accent text-white rounded-br-md cursor-pointer' : 'bg-tertiary dark:bg-dark-tertiary text-text-primary dark:text-white rounded-bl-md'}`}>
+            <div onClick={() => isOwn && setMenu(!menu)} className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${isOwn ? 'bg-accent text-white rounded-br-md cursor-pointer' : 'bg-surface-tertiary dark:bg-dark-tertiary text-text-primary dark:text-white rounded-bl-md'}`}>
               {message.type === 'image' && message.media_path && <img src={apiUrl(message.media_path)} className="max-w-full rounded-lg mb-1 max-h-60 object-cover" alt="" />}
               {message.content && <div className="whitespace-pre-wrap break-words">{message.content}</div>}
               <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
@@ -46,9 +46,9 @@ export default function MessageBubble({ message, isOwn, chatMembers }: Props) {
                 {message.edited ? 1 > 0 && <span className={`text-[10px] ${isOwn ? 'text-white/60' : 'text-text-tertiary'}`}>edited</span> : null}
               </div>
             </div>
-            {isOwn && menu && <div className="absolute right-0 top-full mt-1 bg-white dark:bg-dark-secondary rounded-xl shadow-lg border border-tertiary dark:border-dark-tertiary overflow-hidden z-50 min-w-[100px]">
-              <button onClick={() => { setEditing(true); setMenu(false); }} className="w-full px-3 py-2 text-left hover:bg-tertiary dark:hover:bg-dark-tertiary text-xs">Edit</button>
-              <button onClick={() => { handleDelete(); setMenu(false); }} className="w-full px-3 py-2 text-left hover:bg-tertiary dark:hover:bg-dark-tertiary text-xs text-red-400">Delete</button>
+            {isOwn && menu && <div className="absolute right-0 top-full mt-1 bg-white dark:bg-dark-secondary rounded-xl shadow-lg border border-surface-tertiary dark:border-dark-tertiary overflow-hidden z-50 min-w-[100px]">
+              <button onClick={() => { setEditing(true); setMenu(false); }} className="w-full px-3 py-2 text-left hover:bg-surface-tertiary dark:hover:bg-dark-tertiary text-xs">Edit</button>
+              <button onClick={() => { handleDelete(); setMenu(false); }} className="w-full px-3 py-2 text-left hover:bg-surface-tertiary dark:hover:bg-dark-tertiary text-xs text-red-400">Delete</button>
             </div>}
           </div>
         )}

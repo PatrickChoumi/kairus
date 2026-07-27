@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-interface User { id: string; phone: string; username?: string; display_name: string; avatar?: string; }
+export interface User { id: string; phone: string; username?: string; display_name: string; avatar?: string; }
 interface AuthState {
   token: string | null;
   user: User | null;

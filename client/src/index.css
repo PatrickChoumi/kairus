@@ -11,6 +11,6 @@
 @layer components {
   .btn { @apply px-4 py-2 rounded-lg font-medium transition-all duration-150 active:scale-[0.98] cursor-pointer; }
   .btn-primary { @apply btn bg-accent text-white hover:bg-accent-hover; }
-  .btn-ghost { @apply btn text-text-secondary hover:bg-tertiary dark:hover:bg-dark-tertiary; }
-  .input { @apply w-full px-4 py-3 rounded-xl bg-tertiary dark:bg-dark-tertiary text-text-primary dark:text-white placeholder-text-tertiary; }
+  .btn-ghost { @apply btn text-text-secondary hover:bg-surface-tertiary dark:hover:bg-dark-tertiary; }
+  .input { @apply w-full px-4 py-3 rounded-xl bg-surface-tertiary dark:bg-dark-tertiary text-text-primary dark:text-white placeholder-text-tertiary; }
 }
