@@ -1,4 +1,4 @@
-import initSqlJs, { Database } from 'sql.js';
+import initSqlJs from 'sql.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,10 +6,14 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.join(__dirname, '..', 'kairus.db');
 
-let db: Database;
+let db: any;
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function save() {
-  fs.writeFileSync(DB_PATH, Buffer.from(db.export()));
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    try { fs.writeFileSync(DB_PATH, Buffer.from(db.export())); } catch {}
+  }, 1000);
 }
 
 export async function initDb() {
@@ -54,8 +58,24 @@ export async function initDb() {
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (contact_id) REFERENCES users(id) ON DELETE CASCADE)`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS reactions (
+    message_id TEXT NOT NULL, user_id TEXT NOT NULL, emoji TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (message_id, user_id, emoji),
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS read_receipts (
+    message_id TEXT NOT NULL, user_id TEXT NOT NULL,
+    read_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (message_id, user_id),
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)`);
+
   db.run('CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at)');
   db.run('CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_members(user_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_read_receipts_message ON read_receipts(message_id)');
   save();
 }
 
@@ -76,4 +96,10 @@ export function get(sql: string, params: any[] = []) {
 export function run(sql: string, params: any[] = []) {
   db.run(sql, params);
   save();
+}
+
+export function close() {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  fs.writeFileSync(DB_PATH, Buffer.from(db.export()));
+  db.close();
 }

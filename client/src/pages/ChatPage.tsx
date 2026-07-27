@@ -1,53 +1,91 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
-import { getSocket, disconnectSocket, apiUrl } from '../store/socket';
-import { useNotifications } from '../hooks/useNotifications';
+import { getSocket } from '../store/socket';
+import { api } from '../lib/api';
 import ChatList from '../components/ChatList';
 import ChatWindow from '../components/ChatWindow';
 import NewChatModal from '../components/NewChatModal';
 import SettingsPanel from '../components/SettingsPanel';
+import SearchDialog from '../components/SearchDialog';
+import ProfileModal from '../components/ProfileModal';
 
 export default function ChatPage() {
-  const { user, logout } = useAuthStore();
-  const { chats, setChats, addMessage, editMessage, deleteMessage, setActiveChat, activeChat } = useChatStore();
-  const { requestPermission, notify } = useNotifications();
-  const [showNew, setShowNew] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const { token, user, logout, socketStatus } = useAuthStore();
+  const { chats, setChats, activeChat, setActiveChat, setMessages } = useChatStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileList, setMobileList] = useState(true);
+  const [showMobileList, setShowMobileList] = useState(true);
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showProfile, setShowProfile] = useState<{ id: string; name: string; avatar?: string } | null>(null);
 
-  useEffect(() => { requestPermission(); }, []);
-
-  useEffect(() => {
-    fetch(apiUrl('/api/chats')).then(r => r.json()).then(setChats);
+  const loadChats = useCallback(async () => {
+    try { const c = await api.chats.list(); setChats(c); } catch {}
   }, []);
 
+  useEffect(() => { loadChats(); }, []);
+
+  const selectChat = useCallback(async (chatId: string) => {
+    setActiveChat(chatId);
+    setShowMobileList(false);
+    setSidebarOpen(false);
+    if (window.innerWidth <= 768) setSidebarOpen(false);
+    try {
+      const msgs = await api.messages.list(chatId);
+      setMessages(chatId, msgs);
+      const unreadIds = msgs.filter((m: any) => m.sender_id !== user?.id).map((m: any) => m.id);
+      if (unreadIds.length) api.messages.read(chatId, unreadIds).catch(() => {});
+    } catch {}
+  }, [user]);
+
+  const handleBack = () => { setActiveChat(null); setShowMobileList(true); setSidebarOpen(true); };
+
+  const handleNewChat = () => { setShowNewChat(true); };
+  const handleSettings = () => { setShowSettings(true); };
+  const handleSearch = () => { setShowSearch(true); };
+  const handleProfile = (id: string, name: string, avatar?: string) => { setShowProfile({ id, name, avatar }); };
+
   useEffect(() => {
-    const s = getSocket();
-    if (!s) return;
-    s.on('new_message', (msg) => {
-      addMessage(msg);
-      if (msg.sender_id !== user?.id && msg.chat_id !== activeChat) {
-        notify(msg.sender_name, msg.content || 'Sent an image', msg.chat_id);
-      }
-    });
-    s.on('edit_message', editMessage);
-    s.on('delete_message', ({ id, chat_id }) => deleteMessage(id, chat_id));
-    s.on('chat_created', () => fetch(apiUrl('/api/chats')).then(r => r.json()).then(setChats));
-    return () => { s.off('new_message'); s.off('edit_message'); s.off('delete_message'); s.off('chat_created'); };
-  }, [activeChat, user?.id]);
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setShowSearch(true); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const activeChatData = chats.find(c => c.id === activeChat);
 
   return (
     <div className="h-screen flex overflow-hidden bg-surface dark:bg-dark-bg">
-      <ChatList chats={chats} activeChat={activeChat} onSelect={(id) => { setActiveChat(id); setMobileList(false); }}
-        onNewChat={() => setShowNew(true)} onSettings={() => setShowSettings(true)}
-        onLogout={() => { disconnectSocket(); logout(); }} user={user}
-        sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        showMobileList={mobileList} />
-      <ChatWindow chatId={activeChat} onBack={() => setMobileList(true)} showMobileList={mobileList} />
-      {showNew && <NewChatModal onClose={() => setShowNew(false)} />}
+      {socketStatus === 'disconnected' && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500 text-white text-xs text-center py-1 font-medium" role="alert">
+          Reconnexion…
+        </div>
+      )}
+
+      <ChatList
+        chats={chats}
+        activeChat={activeChat}
+        onSelect={selectChat}
+        onNewChat={handleNewChat}
+        onSettings={handleSettings}
+        onSearch={handleSearch}
+        onLogout={logout}
+        sidebarOpen={sidebarOpen}
+        showMobileList={showMobileList}
+      />
+
+      <ChatWindow
+        chat={activeChatData}
+        onBack={handleBack}
+        onProfile={handleProfile}
+      />
+
+      {showNewChat && <NewChatModal onClose={() => setShowNewChat(false)} onCreated={(id) => { setShowNewChat(false); selectChat(id); }} />}
       {showSettings && <SettingsPanel user={user} onClose={() => setShowSettings(false)} />}
+      {showSearch && <SearchDialog onClose={() => setShowSearch(false)} onSelectChat={selectChat} />}
+      {showProfile && <ProfileModal userId={showProfile.id} name={showProfile.name} avatar={showProfile.avatar} onClose={() => setShowProfile(null)} />}
     </div>
   );
 }
