@@ -13,16 +13,27 @@ import rateLimit from 'express-rate-limit';
 import { initDb, all, get, run } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const JWT_SECRET: string = process.env.JWT_SECRET || (() => { throw new Error('FATAL: JWT_SECRET not set'); })();
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const rawSecret = process.env.JWT_SECRET;
+if (!rawSecret) {
+  console.warn('WARNING: JWT_SECRET not set, using dev default. Set JWT_SECRET in .env for production.');
+}
+const jwtSecret: string = rawSecret || 'kairus-dev-default-secret';
+
+function parseOrigin(val: string | undefined): string | string[] {
+  if (!val) return 'http://localhost:5173';
+  if (val.includes(',')) return val.split(',').map(s => s.trim()).filter(Boolean);
+  return val;
+}
+
+const corsOrigin = parseOrigin(process.env.CORS_ORIGIN);
 const PORT = parseInt(process.env.PORT || '3001');
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, { cors: { origin: CORS_ORIGIN, methods: ['GET', 'POST'] } });
+const io = new Server(httpServer, { cors: { origin: corsOrigin, methods: ['GET', 'POST'] } });
 
 app.set('trust proxy', 1);
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors({ origin: corsOrigin }));
 app.use(express.json({ limit: '10mb' }));
 
 const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
@@ -48,7 +59,7 @@ interface AuthReq extends express.Request { user?: User; }
 /* ─── Auth helpers ─── */
 function getUser(token: string): User | null {
   try {
-    const p = jwt.verify(token, JWT_SECRET!) as unknown as { userId: string };
+    const p = jwt.verify(token, jwtSecret!) as unknown as { userId: string };
     return get('SELECT id, phone, username, display_name, avatar FROM users WHERE id = ?', [p.userId]) || null;
   } catch { return null; }
 }
@@ -71,12 +82,6 @@ const apiLimiter = rateLimit({ windowMs: 60_000, max: 200, message: { error: 'Ra
 app.use('/api/auth', authLimiter);
 app.use('/api/', apiLimiter);
 
-/* ─── Error handler ─── */
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err);
-  res.status(500).json({ error: 'Internal error' });
-});
-
 /* ─── Routes ─── */
 app.get('/health', (_req, res) => res.json({ ok: true, timestamp: new Date().toISOString() }));
 
@@ -88,8 +93,8 @@ app.post('/api/auth/register', (req, res) => {
   if (get('SELECT id FROM users WHERE phone = ?', [phone])) return res.status(409).json({ error: 'Phone exists' });
   const id = uuid();
   run('INSERT INTO users (id, phone, display_name, password_hash) VALUES (?,?,?,?)', [id, phone, display_name, bcrypt.hashSync(password, 12)]);
-  const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: '7d' });
-  const refreshToken = jwt.sign({ userId: id, type: 'refresh' }, JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ userId: id }, jwtSecret, { expiresIn: '7d' });
+  const refreshToken = jwt.sign({ userId: id, type: 'refresh' }, jwtSecret, { expiresIn: '30d' });
   res.json({ token, refreshToken, user: { id, phone, display_name } });
 });
 
@@ -99,8 +104,8 @@ app.post('/api/auth/login', (req, res) => {
   const { phone, password } = req.body;
   const user = get('SELECT * FROM users WHERE phone = ?', [phone]);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) return res.status(401).json({ error: 'Invalid credentials' });
-  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-  const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ userId: user.id }, jwtSecret, { expiresIn: '7d' });
+  const refreshToken = jwt.sign({ userId: user.id, type: 'refresh' }, jwtSecret, { expiresIn: '30d' });
   res.json({ token, refreshToken, user: { id: user.id, phone: user.phone, username: user.username, display_name: user.display_name, avatar: user.avatar } });
 });
 
@@ -108,11 +113,11 @@ app.post('/api/auth/refresh', (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken) return res.status(400).json({ error: 'Missing refreshToken' });
   try {
-    const p = jwt.verify(refreshToken, JWT_SECRET) as { userId: string; type: string };
+    const p = jwt.verify(refreshToken, jwtSecret) as { userId: string; type: string };
     if (p.type !== 'refresh') return res.status(401).json({ error: 'Invalid token type' });
     const user = get('SELECT id, phone, username, display_name, avatar FROM users WHERE id = ?', [p.userId]);
     if (!user) return res.status(401).json({ error: 'User not found' });
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id }, jwtSecret, { expiresIn: '7d' });
     res.json({ token });
   } catch { return res.status(401).json({ error: 'Invalid token' }); }
 });
@@ -374,6 +379,12 @@ io.on('connection', (socket) => {
 /* ─── Online status endpoint ─── */
 app.get('/api/users/online', auth, (_req: any, res) => {
   res.json(Array.from(onlineUsers.keys()));
+});
+
+/* ─── Error handler ─── */
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: 'Internal error' });
 });
 
 /* ─── Start ─── */
