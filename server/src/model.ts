@@ -187,16 +187,115 @@ export function revokeSessions(id: string): number {
   return tokenVersionOf(id)
 }
 
-export function searchUsers(query: string, exclude: string, limit = 8): User[] {
-  // The handle side is prefix-anchored so it can use the unique index; the name
-  // side is a scan, which the users table is small enough to afford.
+/**
+ * Finding people.
+ *
+ * There is deliberately no browsable directory. Among people you already have
+ * a conversation with, search is loose — you are looking for someone you know.
+ * Beyond that circle, only an **exact** handle resolves: someone has to have
+ * given it to you. Typing three letters must not enumerate strangers, because
+ * an enumerable directory plus an open inbox is a harassment tool.
+ *
+ * Anyone on either side of a block is invisible in both directions.
+ */
+export function searchUsers(query: string, viewerId: string, limit = 8): User[] {
+  const term = query.trim()
+  if (!term) return []
+
+  const known = db
+    .prepare(
+      `SELECT DISTINCT u.id, u.handle, u.name, u.hue
+       FROM participants mine
+       JOIN participants theirs ON theirs.conversation_id = mine.conversation_id
+       JOIN users u ON u.id = theirs.user_id
+       WHERE mine.user_id = ?
+         AND u.id != ?
+         AND (u.handle LIKE ? || '%' OR u.name LIKE '%' || ? || '%')
+         AND NOT EXISTS (SELECT 1 FROM blocks b
+                         WHERE (b.blocker_id = ? AND b.blocked_id = u.id)
+                            OR (b.blocker_id = u.id AND b.blocked_id = ?))
+       ORDER BY length(u.handle) ASC LIMIT ?`,
+    )
+    .all(viewerId, viewerId, term, term, viewerId, viewerId, limit) as User[]
+
+  if (known.length >= limit || !isHandle(term.toLowerCase())) return known
+
+  const stranger = db
+    .prepare(
+      `SELECT id, handle, name, hue FROM users u
+       WHERE u.handle = ? AND u.id != ?
+         AND NOT EXISTS (SELECT 1 FROM blocks b
+                         WHERE (b.blocker_id = ? AND b.blocked_id = u.id)
+                            OR (b.blocker_id = u.id AND b.blocked_id = ?))`,
+    )
+    .get(term.toLowerCase(), viewerId, viewerId, viewerId) as User | undefined
+
+  if (!stranger || known.some((u) => u.id === stranger.id)) return known
+  return [...known, stranger]
+}
+
+/* ----------------------------------------------------------------- blocks */
+
+/** True when either person has blocked the other. */
+export function isBlocked(a: string, b: string): boolean {
+  return !!db
+    .prepare(
+      `SELECT 1 FROM blocks
+       WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)`,
+    )
+    .get(a, b, b, a)
+}
+
+export function blockUser(blockerId: string, blockedId: string): void {
+  if (blockerId === blockedId) return
+  db.prepare(
+    `INSERT OR IGNORE INTO blocks (blocker_id, blocked_id, created_at) VALUES (?, ?, ?)`,
+  ).run(blockerId, blockedId, Date.now())
+}
+
+export function unblockUser(blockerId: string, blockedId: string): void {
+  db.prepare(`DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?`).run(
+    blockerId,
+    blockedId,
+  )
+}
+
+export function listBlocked(blockerId: string): User[] {
   return db
     .prepare(
-      `SELECT id, handle, name, hue FROM users
-       WHERE id != ? AND (handle LIKE ? || '%' OR name LIKE '%' || ? || '%')
-       ORDER BY length(handle) ASC LIMIT ?`,
+      `SELECT u.id, u.handle, u.name, u.hue FROM blocks b
+       JOIN users u ON u.id = b.blocked_id
+       WHERE b.blocker_id = ? ORDER BY b.created_at DESC`,
     )
-    .all(exclude, query, query, limit) as User[]
+    .all(blockerId) as User[]
+}
+
+/**
+ * True when a block stands between any two participants of a conversation.
+ * Checked on every send: blocking has to close an existing thread, not merely
+ * prevent a new one from being opened.
+ */
+export function blockedInConversation(conversationId: string, userId: string): boolean {
+  return !!db
+    .prepare(
+      `SELECT 1 FROM participants p
+       JOIN blocks b ON (b.blocker_id = ? AND b.blocked_id = p.user_id)
+                     OR (b.blocked_id = ? AND b.blocker_id = p.user_id)
+       WHERE p.conversation_id = ? AND p.user_id != ?`,
+    )
+    .get(userId, userId, conversationId, userId)
+}
+
+/** The people on the other side of this viewer's conversations that are blocked. */
+export function blockedPeerIds(viewerId: string): string[] {
+  return (
+    db
+      .prepare(
+        `SELECT blocked_id AS id FROM blocks WHERE blocker_id = ?
+         UNION SELECT blocker_id AS id FROM blocks WHERE blocked_id = ?`,
+      )
+      .all(viewerId, viewerId) as { id: string }[]
+  ).map((r) => r.id)
 }
 
 /* ---------------------------------------------------------- conversations */

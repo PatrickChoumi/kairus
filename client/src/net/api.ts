@@ -94,7 +94,22 @@ export const api = {
 
   revokeSessions: () => request<{ token: string }>('/api/account/revoke', { method: 'POST' }),
 
-  me: () => request<{ user: User }>('/api/me'),
+  /** May hand back a fresher token when the current one is getting old. */
+  me: () => request<{ user: User; token?: string }>('/api/me'),
+
+  blocked: () => request<{ people: User[] }>('/api/blocks'),
+
+  block: (handle: string) =>
+    request<{ blocked: User }>('/api/blocks', {
+      method: 'POST',
+      body: JSON.stringify({ handle }),
+    }),
+
+  unblock: (handle: string) =>
+    request<{ unblocked: User }>('/api/blocks/remove', {
+      method: 'POST',
+      body: JSON.stringify({ handle }),
+    }),
 
   openConversation: (handle: string) =>
     request<{ conversation: Conversation }>('/api/conversations', {

@@ -6,7 +6,7 @@ import { SPRING } from '../motion/spring'
 import { useSpringTo } from '../motion/hooks'
 import type { SearchHit, User } from '../net/types'
 
-const GROUPS = ['conversations', 'quelqu’un d’autre', 'dit plus tôt', 'réglages'] as const
+const GROUPS = ['conversations', 'quelqu’un d’autre', 'dit plus tôt', 'bloqués', 'réglages'] as const
 type Group = (typeof GROUPS)[number]
 
 type Item = {
@@ -49,6 +49,11 @@ export function Cursor() {
   const reading = useStore((s) => s.reading)
   const toggleReading = useStore((s) => s.toggleReading)
   const openId = useStore((s) => s.open)
+  const openPeer = useStore((s) => s.conversations.find((c) => c.id === s.open)?.peer ?? null)
+  const blocked = useStore((s) => s.blocked)
+  const block = useStore((s) => s.block)
+  const unblock = useStore((s) => s.unblock)
+  const loadBlocked = useStore((s) => s.loadBlocked)
   const leave = useStore((s) => s.leave)
   const signOut = useStore((s) => s.signOut)
   const notify = useStore((s) => s.notify)
@@ -100,9 +105,10 @@ export function Cursor() {
       setAnswers([])
       return
     }
+    void loadBlocked()
     const id = requestAnimationFrame(() => field.current?.focus())
     return () => cancelAnimationFrame(id)
-  }, [shown])
+  }, [shown, loadBlocked])
 
   // Remote lookups are debounced; local matches are instant.
   useEffect(() => {
@@ -182,6 +188,20 @@ export function Cursor() {
       })
     }
 
+    // Blocked people are only listed when you go looking for them.
+    if (term && fits('bloqués bloquer débloquer', term)) {
+      for (const person of blocked) {
+        list.push({
+          key: `b:${person.id}`,
+          group: 'bloqués',
+          label: person.name,
+          hint: 'débloquer',
+          face: person,
+          run: () => void unblock(person.handle),
+        })
+      }
+    }
+
     const commands: Item[] = [
       {
         key: 'x:theme',
@@ -203,6 +223,17 @@ export function Cursor() {
               group: 'réglages' as const,
               label: 'fermer la conversation',
               run: leave,
+            },
+          ]
+        : []),
+      ...(openPeer
+        ? [
+            {
+              key: 'x:block',
+              group: 'réglages' as const,
+              label: `bloquer ${openPeer.name}`,
+              hint: 'plus de messages, plus de présence, dans les deux sens',
+              run: () => void block(openPeer.handle),
             },
           ]
         : []),
@@ -279,6 +310,10 @@ export function Cursor() {
     theme,
     reading,
     openId,
+    openPeer,
+    blocked,
+    block,
+    unblock,
     enter,
     startWith,
     setTheme,

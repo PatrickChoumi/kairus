@@ -51,6 +51,7 @@ sonde `/api/health`.
 3. **Variables** → ajouter :
    - `JWT_SECRET` = la sortie de l'étape 1
    - `TRUST_PROXY` = `1`
+   - `BACKUP_DIR` = `/data/backups` — sans ça, aucune sauvegarde n'est prise
 4. **Settings → Volumes → New Volume**, point de montage **`/data`**.
    Sans ça, chaque redéploiement efface tous les comptes et tous les messages.
    Le `Dockerfile` ne déclare volontairement **pas** d'instruction `VOLUME` :
@@ -87,6 +88,7 @@ primary_region = "cdg"
   PORT = "4000"
   TRUST_PROXY = "1"
   DATA_DIR = "/data"
+  BACKUP_DIR = "/data/backups"
 
 [mounts]
   source = "kairus_data"
@@ -134,6 +136,7 @@ docker run -d --name kairus --restart unless-stopped \
   -p 127.0.0.1:4000:4000 \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
   -e TRUST_PROXY=1 \
+  -e BACKUP_DIR=/data/backups \
   -v kairus-data:/data \
   kairus
 ```
@@ -185,6 +188,7 @@ server {
 | `DATA_DIR`    | `/data`                       | Ailleurs que sur le volume : tout est perdu au redéploiement.                                                  |
 | `PORT`        | fourni par l'hôte             | Railway et Fly l'injectent. Ne le figez pas.                                                                   |
 | `NODE_ENV`    | `production`                  | Déjà posé par le `Dockerfile`.                                                                                 |
+| `BACKUP_DIR`  | `/data/backups`               | Non défini : **aucune sauvegarde n'est prise**. C'est la différence entre un incident et une perte définitive.  |
 | `CORS_ORIGIN` | **laisser vide**              | Inutile ici : le client est servi par le même serveur. Ne le remplissez que pour un front hébergé ailleurs.     |
 
 ---
@@ -200,18 +204,22 @@ curl -s https://kairus.example.com/api/health          # {"ok":true}
 # 2. Le client est bien servi
 curl -sI https://kairus.example.com/ | head -1         # 200
 
-# 3. Le refus par défaut du CORS tient
+# 3. Les en-têtes de sécurité sont là
+curl -sI https://kairus.example.com/ | grep -i 'content-security-policy\|x-frame-options'
+# ↑ une CSP sans unsafe-inline, et frame-options DENY
+
+# 4. Le refus par défaut du CORS tient
 curl -sI -H 'origin: https://ailleurs.example' \
      https://kairus.example.com/api/health | grep -i access-control
 # ↑ ne doit RIEN afficher
 
-# 4. Un compte se crée
+# 5. Un compte se crée
 curl -s -X POST https://kairus.example.com/api/auth/register \
   -H 'content-type: application/json' \
   -d '{"handle":"essai","name":"Essai","password":"une-phrase-assez-longue"}'
 # ↑ renvoie un token et une recoveryPhrase
 
-# 5. La limitation de débit mord
+# 6. La limitation de débit mord
 for i in $(seq 1 12); do
   curl -s -o /dev/null -w "%{http_code} " -X POST \
     https://kairus.example.com/api/auth/login \
@@ -235,22 +243,51 @@ en PWA, ni le bouton « copier » de la phrase de secours ne fonctionnent.
 
 Le volume est le seul endroit où vivent vos données. La base est en mode WAL,
 donc **copier `kairus.db` seul donne une copie potentiellement incohérente** —
-les écritures récentes sont dans `kairus.db-wal`.
+les écritures récentes sont dans `kairus.db-wal`. Le serveur utilise l'API de
+sauvegarde de SQLite, qui prend un instantané cohérent d'une base vivante.
 
-La bonne façon, avec ce qui est déjà dans l'image :
+### Automatiques
 
-```bash
-docker exec kairus node -e "
-  const D = require('/app/server/node_modules/better-sqlite3');
-  new D('/data/kairus.db', { readonly: true })
-    .backup('/data/backup.db')
-    .then(() => console.log('ok'))
-"
-docker cp kairus:/data/backup.db ./kairus-$(date +%F).db
+Posez `BACKUP_DIR` et il n'y a plus rien à faire : un instantané au démarrage,
+puis toutes les 24 h, en ne gardant que les sept derniers.
+
+```
+BACKUP_DIR=/data/backups
+BACKUP_EVERY_HOURS=24    # facultatif
+BACKUP_KEEP=7            # facultatif
 ```
 
-Sur Railway ou Fly, la même commande via `railway run` / `fly ssh console`.
-Mettez-la dans une tâche quotidienne.
+Le journal le dit à chaque fois :
+`[kairus] backup /data/backups/kairus-2026-07-29T17-30-57.db (7 kept)`.
+
+**Ces instantanés vivent sur le même volume que la base.** Ils vous sauvent
+d'une corruption ou d'une fausse manœuvre, pas de la perte du volume. Sortez-en
+un régulièrement :
+
+```bash
+docker cp kairus:/data/backups ./sauvegardes-kairus
+# ou : fly ssh sftp get /data/backups/kairus-....db
+```
+
+### À la main
+
+```bash
+docker exec kairus node server/dist/cli/backup.js /data/backups
+```
+
+### Restaurer
+
+Arrêtez le service, remettez l'instantané en place sous le nom attendu, et
+**supprimez les fichiers `-wal` et `-shm`** : ils appartiennent à l'ancienne
+base et la contrediraient.
+
+```bash
+docker stop kairus
+docker run --rm -v kairus-data:/data debian:stable-slim sh -c '
+  cp /data/backups/kairus-2026-07-29T17-30-57.db /data/kairus.db &&
+  rm -f /data/kairus.db-wal /data/kairus.db-shm'
+docker start kairus
+```
 
 ---
 
@@ -283,3 +320,6 @@ Sur Railway et Fly, un `git push` sur la branche suivie suffit.
   client se reconnecte en boucle sans erreur visible.
 - **Machine qui s'endort** (Fly `auto_stop_machines`, offres « scale to zero »)
   — toutes les WebSockets tombent à chaque assoupissement.
+- **`BACKUP_DIR` non défini** — aucune sauvegarde n'est prise, et vous ne le
+  découvrirez que le jour où vous en cherchez une.
+- **`VOLUME` réintroduit dans le `Dockerfile`** — Railway refuse de construire.

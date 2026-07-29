@@ -50,6 +50,15 @@ db.exec(`
     deleted_at      INTEGER
   );
 
+  CREATE TABLE IF NOT EXISTS blocks (
+    blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (blocker_id, blocked_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON blocks (blocked_id);
+
   CREATE INDEX IF NOT EXISTS idx_messages_conversation
     ON messages (conversation_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_participants_user
@@ -58,11 +67,22 @@ db.exec(`
 
 /* --------------------------------------------------------------- migrations */
 
-/** Adds a column to a database created before it existed. */
+/**
+ * Adds a column to a database created before it existed.
+ *
+ * Deliberately tolerant of losing the race: if two processes start together
+ * during a deployment, both see the column missing and both try to add it.
+ * The loser gets a duplicate-column error, which means the work is done.
+ */
 function ensureColumn(table: string, column: string, definition: string): void {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
   if (columns.some((c) => c.name === column)) return
-  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!/duplicate column name/i.test(message)) throw error
+  }
 }
 
 ensureColumn('users', 'token_version', 'INTEGER NOT NULL DEFAULT 0')

@@ -1,6 +1,7 @@
-import { createReadStream, existsSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { extname, join, normalize, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { buildPolicy, inlineScriptHashes, usePolicy } from './headers.js'
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -20,9 +21,13 @@ const TYPES: Record<string, string> = {
  */
 export function serveClient(root: string) {
   const base = resolve(root)
-  const available = existsSync(join(base, 'index.html'))
+  const shell = join(base, 'index.html')
+  const available = existsSync(shell)
 
-  return (req: IncomingMessage, res: ServerResponse): boolean => {
+  // Hashed once at boot: the shell does not change while the process runs.
+  if (available) usePolicy(buildPolicy(inlineScriptHashes(readFileSync(shell, 'utf8'))))
+
+  const handle = (req: IncomingMessage, res: ServerResponse): boolean => {
     if (!available) return false
     if (req.method !== 'GET' && req.method !== 'HEAD') return false
 
@@ -32,7 +37,7 @@ export function serveClient(root: string) {
 
     let file = isInside && existsSync(candidate) && statSync(candidate).isFile() ? candidate : null
     // Single-page app: unknown paths fall back to the shell.
-    if (!file) file = join(base, 'index.html')
+    if (!file) file = shell
 
     const type = TYPES[extname(file)] ?? 'application/octet-stream'
     const immutable = /\/assets\//.test(file)
@@ -47,4 +52,6 @@ export function serveClient(root: string) {
     createReadStream(file).pipe(res)
     return true
   }
+
+  return handle
 }

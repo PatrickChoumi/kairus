@@ -60,7 +60,10 @@ n'ait qu'un seul endroit où se poser. Thèmes clair et sombre, avec respect de
   retiré garde sa place pour que les citations continuent de résoudre
 - Réponses citées, avec saut vers le message cité
 - Indicateur de frappe, présence, accusés de lecture, compteurs de non-lus
-- Recherche dans les personnes et dans l'historique, sur un index FTS5
+- Recherche dans l'historique sur un index FTS5 ; les personnes se trouvent par
+  nom d'usage exact hors de votre cercle, librement à l'intérieur
+- Blocage réciproque : plus de messages, plus de présence, plus de visibilité
+  dans la recherche, dans les deux sens
 - Historique paginé au défilement vers le haut
 - Reconnexion automatique avec repli exponentiel, et file d'attente des envois
   pendant une coupure
@@ -92,6 +95,36 @@ garde qu'un hash bcrypt. Elle permet de reprendre le compte, et se remplace en
 étant utilisée. On peut en demander une nouvelle à tout moment depuis le
 Curseur.
 
+**En-têtes HTTP.** Chaque réponse — API et client — porte une
+`Content-Security-Policy` sans `unsafe-inline` ni `unsafe-eval`, plus
+`nosniff`, `frame-ancestors 'none'`, `Referrer-Policy: no-referrer`,
+`Permissions-Policy` et les en-têtes d'isolation d'origine. `HSTS` n'est posé
+que sur une connexion réellement chiffrée. Le seul script inline de
+l'application — la bascule de thème avant le premier rendu — est **haché au
+démarrage** et autorisé par son empreinte, plutôt que d'ouvrir la politique.
+C'est la vraie parade au vol de jeton par injection.
+
+**Durée de vie des jetons.** Sept jours, pas trente, avec renouvellement
+silencieux à mi-vie : un jeton volé a une fenêtre bornée, et personne n'a à se
+reconnecter pour autant.
+
+**Pas d'annuaire.** On ne peut pas énumérer les comptes. Hors des personnes avec
+qui vous avez déjà une conversation, seul un **nom d'usage exact** résout —
+il faut vous l'avoir donné. Un annuaire parcourable plus une boîte ouverte,
+c'est un outil de harcèlement clé en main.
+
+**Blocage.** Réciproque et immédiat : il ferme aussi les conversations déjà
+ouvertes, coupe la présence et la frappe dans les deux sens, et rend chacun
+invisible à la recherche de l'autre. Un blocage se présente comme une absence :
+tenter d'ouvrir une conversation avec quelqu'un qui vous a bloqué répond
+« personne ne porte ce nom » — confirmer l'existence du compte renseignerait le
+harceleur.
+
+**Sauvegardes.** Avec `BACKUP_DIR`, le serveur prend un instantané cohérent au
+démarrage puis toutes les 24 h, et ne garde que les sept derniers. Une
+sauvegarde qui tourne sans qu'on y pense vaut mieux qu'une procédure
+documentée que personne n'exécute.
+
 **CORS.** Sans `CORS_ORIGIN`, seule l'origine qui sert l'application est
 acceptée — pas « n'importe laquelle ». Le déploiement en un conteneur n'a
 jamais besoin d'autre chose.
@@ -100,11 +133,16 @@ jamais besoin d'autre chose.
 combien de proxys sont devant. Sinon n'importe qui forgerait une adresse et
 s'offrirait un budget neuf à chaque requête.
 
-**Ce qui reste un compromis assumé.** Le jeton vit dans `localStorage` : une
-faille XSS future permettrait de le voler. La révocation limite les dégâts —
-changer sa phrase secrète tue le jeton volé — mais un cookie `httpOnly` serait
-plus solide. Le passage impliquerait une protection CSRF et compliquerait le
-déploiement multi-origine ; ce n'est pas fait.
+**Ce qui reste un compromis assumé.** Le jeton vit dans `localStorage`. Trois
+choses en limitent la portée : la CSP, qui empêche l'exécution du script qui le
+volerait ; la durée de vie de sept jours ; et la révocation, qui tue un jeton
+volé dès qu'on change sa phrase secrète. Un cookie `httpOnly` resterait plus
+solide, mais imposerait une protection CSRF et compliquerait le déploiement
+multi-origine ; ce n'est pas fait.
+
+**Ce qui n'existe toujours pas.** Pas de second facteur, et une phrase secrète
+n'a d'autre contrainte que huit caractères — pas de vérification contre les
+fuites connues. C'est en dessous de ce qu'on attend en 2026.
 
 ---
 
@@ -131,14 +169,21 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 35 tests : node:test, base SQLite en mémoire
+npm test                   # 79 tests : 50 côté serveur, 29 côté client
 npm run typecheck          # serveur et client
 ```
 
-La suite couvre la limitation de débit (unitaire et de bout en bout), la
-révocation de jeton, la récupération de compte, les permissions sur les
-messages — on ne réécrit pas les mots d'un autre —, la recherche, et le
-comportement du WebSocket sous charge et à l'éviction.
+**Serveur** (`node:test`, serveur réel, base en mémoire) : limitation de débit,
+révocation de jeton, récupération de compte, permissions sur les messages — on
+ne réécrit pas les mots d'un autre —, recherche et sa robustesse, blocage,
+en-têtes de sécurité, sauvegardes, et le WebSocket sous charge et à l'éviction.
+
+**Client** (`vitest`, jsdom) : le lien temps réel et la réconciliation
+optimiste, c'est-à-dire les deux endroits où une messagerie casse en silence —
+la file d'attente hors ligne, le repli exponentiel, la reprise au réveil de
+l'onglet, le remplacement du message optimiste par son écho, la déduplication,
+et le fait qu'une correction ne re-trie pas la liste ni ne marque quoi que ce
+soit comme non lu.
 
 En production le serveur sert `client/dist` : une seule origine, donc aucun CORS
 à configurer.
@@ -169,6 +214,7 @@ après mise en ligne, et la bonne façon de sauvegarder une base en mode WAL.
 | `PORT`        | `4000` par défaut.                                                 |
 | `CORS_ORIGIN` | Seulement si le client est servi depuis une autre origine.         |
 | `CLIENT_DIST` | Chemin du client compilé. Déduit du dossier du serveur par défaut. |
+| `BACKUP_DIR`  | Active les sauvegardes automatiques. Non défini, il n'y en a aucune. |
 | `TRUST_PROXY` | Nombre de proxys devant le serveur. `0` par défaut. Mettre `1` derrière Railway, Fly ou un reverse proxy, sinon la limitation de débit voit une seule adresse pour tout le monde. |
 
 Côté client, `VITE_API_URL` n'est utile que pour un déploiement séparé du
@@ -188,6 +234,8 @@ client/
 server/
   src/model.ts     accès aux données, requêtes SQL explicites
   src/limiter.ts   token buckets, et toute la politique de limites en un lieu
+  src/headers.ts   CSP et en-têtes de sécurité, hachage du script inline
+  src/backup.ts    instantanés cohérents, planifiés et élagués
   src/router.ts    routes HTTP sur node:http, sans framework
   src/realtime.ts  hub WebSocket : présence, diffusion, battement de cœur
   src/static.ts    service du client compilé en production
@@ -215,6 +263,8 @@ Les messages passent par le WebSocket, mais tout est aussi accessible en HTTP.
 | `POST /api/account/passphrase`     | Changer la phrase secrète               |
 | `POST /api/account/recovery`       | Émettre une nouvelle phrase de secours  |
 | `POST /api/account/revoke`         | Fermer toutes les autres sessions       |
+| `GET`/`POST /api/blocks`           | Lister ou bloquer quelqu'un             |
+| `POST /api/blocks/remove`          | Débloquer                               |
 | `GET /api/health`                  | Sonde de disponibilité                  |
 
 ### Le protocole WebSocket
@@ -238,6 +288,13 @@ dessus :
 - **Groupes.** Conversations à deux seulement.
 - **Notifications push.** Le service worker ne met en cache que la coquille ;
   onglet fermé, rien n'arrive.
-- **Blocage et modération.** N'importe qui connaissant votre nom d'usage peut
-  ouvrir une conversation avec vous.
+- **Modération.** Le blocage existe désormais, mais il n'y a ni signalement, ni
+  administration, ni recours.
+- **Mise à l'échelle horizontale.** Le hub temps réel et les compteurs de
+  limitation vivent dans le processus, la base est un fichier local : deux
+  instances cesseraient de se voir. C'est un plafond d'architecture, pas un
+  réglage.
+- **Second facteur** et vérification des phrases secrètes contre les fuites.
+- **Observabilité.** Un `console.error` est toute la télémétrie. Aucun log
+  structuré, aucune métrique, aucune alerte.
 - **Appels.**

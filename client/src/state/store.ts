@@ -22,6 +22,8 @@ type State = {
   typing: Record<string, number>
   online: Record<string, boolean>
 
+  blocked: User[]
+
   theme: Theme
   reading: boolean
   cursor: boolean
@@ -47,6 +49,10 @@ type Actions = {
   retract: (message: Message) => void
   breathe: () => void
   older: () => Promise<void>
+
+  block: (handle: string) => Promise<void>
+  unblock: (handle: string) => Promise<void>
+  loadBlocked: () => Promise<void>
 
   recover: (handle: string, phrase: string, password: string) => Promise<void>
   changePassphrase: (current: string, next: string) => Promise<void>
@@ -150,6 +156,9 @@ export const useStore = create<State & Actions>((set, get) => {
     connection.on((event) => {
       switch (event.t) {
         case 'ready':
+          // The server swaps an ageing token here; keeping the old one would
+          // mean signing in again the moment it expires.
+          if (event.token) setToken(event.token)
           set({
             me: event.user,
             status: 'in',
@@ -254,6 +263,7 @@ export const useStore = create<State & Actions>((set, get) => {
     editing: null,
     typing: {},
     online: {},
+    blocked: [],
     theme: storedTheme(),
     reading: false,
     cursor: false,
@@ -267,9 +277,10 @@ export const useStore = create<State & Actions>((set, get) => {
         return
       }
       try {
-        const { user } = await api.me()
+        const { user, token: renewed } = await api.me()
+        if (renewed) setToken(renewed)
         set({ me: user, status: 'in' })
-        connection.open(token)
+        connection.open(renewed ?? token)
       } catch {
         setToken(null)
         set({ status: 'out', me: null })
@@ -286,6 +297,36 @@ export const useStore = create<State & Actions>((set, get) => {
       land(token, user)
       // Shown once. There is no email to send it to, so it is this or nothing.
       set({ keepsake: recoveryPhrase })
+    },
+
+    async block(handle) {
+      try {
+        await api.block(handle)
+        // The thread keeps its place and its history; it simply goes quiet.
+        set({ notice: `@${handle} est bloqué` })
+        await get().loadBlocked()
+      } catch (error) {
+        set({ notice: error instanceof ApiError ? error.message : 'impossible de bloquer' })
+      }
+    },
+
+    async unblock(handle) {
+      try {
+        await api.unblock(handle)
+        set({ notice: `@${handle} n’est plus bloqué` })
+        await get().loadBlocked()
+      } catch (error) {
+        set({ notice: error instanceof ApiError ? error.message : 'impossible de débloquer' })
+      }
+    },
+
+    async loadBlocked() {
+      try {
+        const { people } = await api.blocked()
+        set({ blocked: people })
+      } catch {
+        // A block list that cannot be read is not worth a notice.
+      }
     },
 
     async recover(handle, phrase, password) {
@@ -339,6 +380,7 @@ export const useStore = create<State & Actions>((set, get) => {
         cursor: false,
         reading: false,
         keepsake: null,
+        blocked: [],
       })
     },
 

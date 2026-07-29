@@ -35,7 +35,7 @@ export type SearchHit = {
 }
 
 export type Inbound =
-  | { t: 'ready'; user: User; conversations: Conversation[] }
+  | { t: 'ready'; user: User; conversations: Conversation[]; token?: string }
   | { t: 'message'; message: Message; nonce?: string }
   /** The same message in a new state: rewritten, or taken back. */
   | { t: 'revised'; message: Message }

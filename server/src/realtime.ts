@@ -3,8 +3,10 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import { limits } from './limiter.js'
 import {
   addMessage,
+  blockedInConversation,
   describeConversation,
   findLiveIdentity,
+  isBlocked,
   isParticipant,
   listConversations,
   markRead,
@@ -14,10 +16,10 @@ import {
   type Message,
   type User,
 } from './model.js'
-import { verify } from './token.js'
+import { shouldRenew, sign, verify } from './token.js'
 
 type Outbound =
-  | { t: 'ready'; user: User; conversations: ReturnType<typeof listConversations> }
+  | { t: 'ready'; user: User; conversations: ReturnType<typeof listConversations>; token?: string }
   | { t: 'message'; message: Message; nonce?: string }
   | { t: 'revised'; message: Message }
   | { t: 'typing'; conversation: string; userId: string }
@@ -80,7 +82,8 @@ class Hub {
   /** Everyone in the conversation except one person — used for typing. */
   toPeers(conversationId: string, exceptUserId: string, payload: Outbound): void {
     for (const userId of participantIds(conversationId)) {
-      if (userId !== exceptUserId) this.toUser(userId, payload)
+      if (userId === exceptUserId || isBlocked(exceptUserId, userId)) continue
+      this.toUser(userId, payload)
     }
   }
 
@@ -110,11 +113,16 @@ class Hub {
     }
   }
 
-  /** Everyone sharing a conversation with this person sees them arrive or leave. */
+  /**
+   * Everyone sharing a conversation with this person sees them arrive or leave
+   * — except across a block, where presence would be a way of keeping tabs on
+   * someone who asked not to be contacted.
+   */
   private announcePresence(userId: string, online: boolean): void {
     for (const conversation of listConversations(userId)) {
-      if (conversation.peer.id === userId) continue
-      this.toUser(conversation.peer.id, { t: 'presence', userId, online })
+      const peer = conversation.peer.id
+      if (peer === userId || isBlocked(userId, peer)) continue
+      this.toUser(peer, { t: 'presence', userId, online })
     }
   }
 
@@ -122,7 +130,7 @@ class Hub {
   onlinePeers(viewerId: string): string[] {
     return listConversations(viewerId)
       .map((c) => c.peer.id)
-      .filter((id) => id !== viewerId && this.isOnline(id))
+      .filter((id) => id !== viewerId && this.isOnline(id) && !isBlocked(viewerId, id))
   }
 }
 
@@ -246,7 +254,13 @@ function handleFrame(socket: Socket, frame: Record<string, unknown>): void {
     socket.userId = user.id
     socket.version = claims.version
     hub.attach(socket, user.id)
-    send(socket, { t: 'ready', user, conversations: listConversations(user.id) })
+    send(socket, {
+      t: 'ready',
+      user,
+      conversations: listConversations(user.id),
+      // An old-but-valid token is swapped here too, not only over HTTP.
+      ...(shouldRenew(claims) ? { token: sign(user.id, claims.version) } : {}),
+    })
     for (const peerId of hub.onlinePeers(user.id)) {
       send(socket, { t: 'presence', userId: peerId, online: true })
     }
@@ -264,6 +278,10 @@ function handleFrame(socket: Socket, frame: Record<string, unknown>): void {
       const body = str(frame, 'body').slice(0, 4000)
       if (!conversation || !body) return
       if (!afford(socket, limits.write, userId, 'vous écrivez plus vite que nous ne pouvons suivre')) {
+        return
+      }
+      if (blockedInConversation(conversation, userId)) {
+        send(socket, { t: 'error', message: 'cette conversation est fermée' })
         return
       }
       const replyTo = str(frame, 'replyTo') || null

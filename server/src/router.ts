@@ -1,15 +1,20 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { env } from './env.js'
+import { applySecurityHeaders } from './headers.js'
 import { limits } from './limiter.js'
 import {
   addMessage,
+  blockedInConversation,
+  blockUser,
   createUser,
   describeConversation,
   findLiveIdentity,
   findUserByHandle,
   findUserRow,
+  isBlocked,
   isHandle,
   isParticipant,
+  listBlocked,
   listConversations,
   listMessages,
   markRead,
@@ -23,11 +28,12 @@ import {
   searchMessages,
   searchUsers,
   tokenVersionOf,
+  unblockUser,
   verifyPassword,
   verifyRecoveryPhrase,
   type Revision,
 } from './model.js'
-import { sign, verify } from './token.js'
+import { shouldRenew, sign, verify } from './token.js'
 import { hub } from './realtime.js'
 
 export class HttpError extends Error {
@@ -45,6 +51,8 @@ type Ctx = {
   url: URL
   body: unknown
   userId: string
+  /** Set when this request's token is old enough to be swapped out. */
+  renewedToken?: string
   /** Who is calling, for the limits that key on the caller rather than the account. */
   address: string
 }
@@ -159,7 +167,11 @@ const unwrap = (revision: Revision) => {
 type Handler = (ctx: Ctx) => unknown | Promise<unknown>
 
 const authed: Record<string, Handler> = {
-  'GET /api/me': ({ userId }) => ({ user: findLiveIdentity(userId, tokenVersionOf(userId)) }),
+  'GET /api/me': ({ userId, renewedToken }) => ({
+    user: findLiveIdentity(userId, tokenVersionOf(userId)),
+    // Present only when the token was getting old. The client swaps it in.
+    ...(renewedToken ? { token: renewedToken } : {}),
+  }),
 
   'GET /api/conversations': ({ userId }) => ({ conversations: listConversations(userId) }),
 
@@ -168,7 +180,11 @@ const authed: Record<string, Handler> = {
     const handle = field(body, 'handle').toLowerCase()
     if (!isHandle(handle)) throw new HttpError(400, 'ce nom d’usage n’est pas valide')
     const peer = findUserByHandle(handle)
-    if (!peer) throw new HttpError(404, 'personne ne porte ce nom')
+    // A blocked person is told the same thing as a non-existent one: revealing
+    // the difference would tell a harasser that their target is still there.
+    if (!peer || isBlocked(userId, peer.id)) {
+      throw new HttpError(404, 'personne ne porte ce nom')
+    }
     const id = openConversation(userId, peer.id)
     const conversation = describeConversation(id, userId)
     if (!conversation) throw new HttpError(500, 'impossible d’ouvrir la conversation')
@@ -200,6 +216,9 @@ const authed: Record<string, Handler> = {
       throw new HttpError(404, 'cette conversation n’existe pas')
     }
     if (!text) throw new HttpError(400, 'message vide')
+    if (blockedInConversation(conversationId, userId)) {
+      throw new HttpError(403, 'cette conversation est fermée')
+    }
     const replyTo = field(body, 'replyTo') || null
     const message = addMessage(conversationId, userId, text.slice(0, 4000), replyTo)
     hub.broadcastMessage(message)
@@ -242,6 +261,34 @@ const authed: Record<string, Handler> = {
     spend(limits.look, userId, 'trop de recherches d’un coup')
     const q = (url.searchParams.get('q') ?? '').trim()
     return { hits: q.length >= 2 ? searchMessages(userId, q) : [] }
+  },
+
+  /* -- blocking ---------------------------------------------------------- */
+
+  'GET /api/blocks': ({ userId }) => ({ people: listBlocked(userId) }),
+
+  'POST /api/blocks': ({ userId, body }) => {
+    const handle = field(body, 'handle').toLowerCase()
+    const peer = isHandle(handle) ? findUserByHandle(handle) : undefined
+    if (!peer) throw new HttpError(404, 'personne ne porte ce nom')
+    if (peer.id === userId) throw new HttpError(400, 'on ne se bloque pas soi-même')
+    blockUser(userId, peer.id)
+    // Both sides stop seeing each other's presence from this moment.
+    hub.toUser(userId, { t: 'presence', userId: peer.id, online: false })
+    hub.toUser(peer.id, { t: 'presence', userId, online: false })
+    return { blocked: publicUser(peer) }
+  },
+
+  'POST /api/blocks/remove': ({ userId, body }) => {
+    const handle = field(body, 'handle').toLowerCase()
+    const peer = isHandle(handle) ? findUserByHandle(handle) : undefined
+    if (!peer) throw new HttpError(404, 'personne ne porte ce nom')
+    unblockUser(userId, peer.id)
+    if (!isBlocked(userId, peer.id)) {
+      hub.toUser(userId, { t: 'presence', userId: peer.id, online: hub.isOnline(peer.id) })
+      hub.toUser(peer.id, { t: 'presence', userId, online: hub.isOnline(userId) })
+    }
+    return { unblocked: publicUser(peer) }
   },
 
   /* -- the account itself ------------------------------------------------ */
@@ -327,6 +374,7 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
   if (!url.pathname.startsWith('/api/')) return false
 
+  applySecurityHeaders(req, res)
   applyCors(req, res)
   if (req.method === 'OPTIONS') {
     res.writeHead(204).end()
@@ -350,9 +398,14 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
 
     const claims = verify(req.headers.authorization?.replace(/^Bearer /i, ''))
     const user = claims ? findLiveIdentity(claims.userId, claims.version) : undefined
-    if (!user) throw new HttpError(401, 'session expirée')
+    if (!claims || !user) throw new HttpError(401, 'session expirée')
 
-    json(res, 200, await guarded({ url, body: await readBody(req), userId: user.id, address }))
+    const renewedToken = shouldRenew(claims) ? sign(user.id, claims.version) : undefined
+    json(
+      res,
+      200,
+      await guarded({ url, body: await readBody(req), userId: user.id, address, renewedToken }),
+    )
   } catch (error) {
     if (error instanceof HttpError) {
       if (error.retryAfter) res.setHeader('retry-after', String(error.retryAfter))
