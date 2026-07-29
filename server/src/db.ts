@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { env } from './env.js'
+import { log } from './log.js'
 
 /** `:memory:` is a database that never touches the disk — used by the tests. */
 const inMemory = env.dataDir === ':memory:'
@@ -58,6 +59,18 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_blocks_blocked ON blocks (blocked_id);
+
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint   TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    p256dh     TEXT NOT NULL,
+    auth       TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    -- Cleared on every success; a subscription that keeps failing is dropped.
+    failures   INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions (user_id);
 
   CREATE INDEX IF NOT EXISTS idx_messages_conversation
     ON messages (conversation_id, created_at DESC);
@@ -129,7 +142,7 @@ function installSearchIndex(): boolean {
     if (fresh) db.exec(`INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')`)
     return true
   } catch (error) {
-    console.warn('[kairus] full-text search unavailable, falling back to scans:', error)
+    log.warn('search.index.unavailable', { error: String(error) })
     return false
   }
 }

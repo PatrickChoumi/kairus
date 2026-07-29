@@ -6,6 +6,7 @@ import {
   blockedInConversation,
   describeConversation,
   findLiveIdentity,
+  findUser,
   isBlocked,
   isParticipant,
   listConversations,
@@ -17,6 +18,8 @@ import {
   type User,
 } from './model.js'
 import { shouldRenew, sign, verify } from './token.js'
+import { knock } from './push.js'
+import { count, gauge, log } from './log.js'
 
 type Outbound =
   | { t: 'ready'; user: User; conversations: ReturnType<typeof listConversations>; token?: string }
@@ -68,6 +71,16 @@ class Hub {
     return this.sockets.has(userId)
   }
 
+  userCount(): number {
+    return this.sockets.size
+  }
+
+  socketCount(): number {
+    let total = 0
+    for (const set of this.sockets.values()) total += set.size
+    return total
+  }
+
   toUser(userId: string, payload: Outbound, skip?: Socket): void {
     const frame = JSON.stringify(payload)
     for (const socket of this.sockets.get(userId) ?? []) {
@@ -89,6 +102,31 @@ class Hub {
 
   broadcastMessage(message: Message, skip?: Socket): void {
     this.toConversation(message.conversationId, { t: 'message', message }, skip)
+    void this.reachTheAbsent(message)
+  }
+
+  /**
+   * Anyone in the conversation with no live socket is not going to see this
+   * until they come back — unless we reach them where they are. Someone with a
+   * socket open needs nothing: the message is already on their screen, and the
+   * client raises its own notification when the tab is merely hidden.
+   */
+  private async reachTheAbsent(message: Message): Promise<void> {
+    const sender = findUser(message.senderId)
+    if (!sender) return
+    for (const userId of participantIds(message.conversationId)) {
+      if (userId === message.senderId || this.isOnline(userId)) continue
+      if (isBlocked(userId, message.senderId)) continue
+      try {
+        await knock(userId, {
+          conversationId: message.conversationId,
+          from: sender.name,
+          body: message.body,
+        })
+      } catch (error) {
+        log.warn('push.knock.failed', { userId, error: String(error) })
+      }
+    }
   }
 
   /** An edit or a retraction: the same message, in its new state. */
@@ -136,6 +174,9 @@ class Hub {
 
 export const hub = new Hub()
 
+gauge('sockets_connected', () => hub.socketCount())
+gauge('users_online', () => hub.userCount())
+
 /** Mirrors the HTTP rule: forged forwarding headers must not buy a new budget. */
 function addressOfUpgrade(req: IncomingMessage, trustProxy: number): string {
   if (trustProxy > 0) {
@@ -178,6 +219,8 @@ export function attachRealtime(server: Server, trustProxy = 0): () => void {
       seen.count += 1
       frames.set(socket, seen)
       if (seen.count > FRAMES_PER_MINUTE) {
+        count('socket.flooded')
+        log.warn('socket.flooded', { address: socket.address })
         socket.close(4008, 'too many frames')
         return
       }
@@ -286,6 +329,7 @@ function handleFrame(socket: Socket, frame: Record<string, unknown>): void {
       }
       const replyTo = str(frame, 'replyTo') || null
       const message = addMessage(conversation, userId, body, replyTo)
+      count('messages_sent')
       const nonce = str(frame, 'nonce')
       send(socket, { t: 'message', message, ...(nonce ? { nonce } : {}) })
       hub.broadcastMessage(message, socket)

@@ -32,6 +32,50 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+/*
+ * A message arriving while the application is closed. The payload was
+ * encrypted for this browser alone — the push service that carried it could
+ * not read it.
+ */
+self.addEventListener('push', (event) => {
+  let notice = { title: 'Kairus', body: 'nouveau message', conversation: null }
+  try {
+    if (event.data) notice = { ...notice, ...event.data.json() }
+  } catch {
+    // A payload we cannot parse is still worth announcing.
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(notice.title, {
+      body: notice.body,
+      icon: '/mark.svg',
+      badge: '/mark.svg',
+      // One conversation, one notification: a burst must not stack up.
+      tag: notice.conversation ? `kairus-${notice.conversation}` : 'kairus',
+      renotify: true,
+      data: { conversation: notice.conversation },
+    }),
+  )
+})
+
+/** Tapping it brings the open tab forward rather than opening a second one. */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const conversation = event.notification.data && event.notification.data.conversation
+  const target = conversation ? `/?c=${conversation}` : '/'
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      for (const client of windows) {
+        if (new URL(client.url).origin !== self.location.origin) continue
+        client.postMessage({ t: 'open-conversation', conversation })
+        return client.focus()
+      }
+      return self.clients.openWindow(target)
+    }),
+  )
+})
+
 self.addEventListener('fetch', (event) => {
   const request = event.request
   if (request.method !== 'GET') return

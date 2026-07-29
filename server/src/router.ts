@@ -35,6 +35,14 @@ import {
 } from './model.js'
 import { shouldRenew, sign, verify } from './token.js'
 import { hub } from './realtime.js'
+import {
+  forgetSubscription,
+  pushEnabled,
+  pushPublicKey,
+  saveSubscription,
+  subscriptionCount,
+} from './push.js'
+import { asPrometheus, count, log, snapshot } from './log.js'
 
 export class HttpError extends Error {
   constructor(
@@ -263,6 +271,32 @@ const authed: Record<string, Handler> = {
     return { hits: q.length >= 2 ? searchMessages(userId, q) : [] }
   },
 
+  /* -- reaching you when the tab is closed -------------------------------- */
+
+  'GET /api/push': ({ userId }) => ({
+    enabled: pushEnabled,
+    key: pushPublicKey(),
+    devices: subscriptionCount(userId),
+  }),
+
+  'POST /api/push/subscribe': ({ userId, body }) => {
+    if (!pushEnabled) throw new HttpError(503, 'les notifications ne sont pas configurées')
+    const subscription = (body as { subscription?: unknown })?.subscription
+    try {
+      saveSubscription(userId, subscription as Parameters<typeof saveSubscription>[1])
+    } catch {
+      throw new HttpError(400, 'abonnement incomplet')
+    }
+    count('push.subscribed')
+    return { devices: subscriptionCount(userId) }
+  },
+
+  'POST /api/push/unsubscribe': ({ userId, body }) => {
+    const endpoint = field(body, 'endpoint')
+    if (endpoint) forgetSubscription(userId, endpoint)
+    return { devices: subscriptionCount(userId) }
+  },
+
   /* -- blocking ---------------------------------------------------------- */
 
   'GET /api/blocks': ({ userId }) => ({ people: listBlocked(userId) }),
@@ -367,6 +401,17 @@ const anonymous: Record<string, Handler> = {
   },
 
   'GET /api/health': () => ({ ok: true }),
+
+  /**
+   * Counters, for whoever is watching. Guarded by METRICS_TOKEN: connection
+   * counts and refusal rates are not something to publish.
+   */
+  'GET /api/metrics': ({ url }) => {
+    const secret = process.env.METRICS_TOKEN?.trim()
+    if (!secret) throw new HttpError(404, 'route inconnue')
+    if (url.searchParams.get('token') !== secret) throw new HttpError(401, 'jeton invalide')
+    return snapshot()
+  },
 }
 
 /** Handles an /api request. Returns false when the path is not ours. */
@@ -383,6 +428,8 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
 
   const address = addressOf(req)
   const key = `${req.method} ${url.pathname}`
+  const startedAt = performance.now()
+  count('http.requests')
 
   try {
     spend(limits.anything, address, 'trop de requêtes')
@@ -408,12 +455,35 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
     )
   } catch (error) {
     if (error instanceof HttpError) {
-      if (error.retryAfter) res.setHeader('retry-after', String(error.retryAfter))
+      if (error.retryAfter) {
+        res.setHeader('retry-after', String(error.retryAfter))
+        count('http.throttled')
+        log.warn('http.throttled', { route: key, address, retryAfter: error.retryAfter })
+      }
+      count(`http.status.${error.status}`)
       json(res, error.status, { error: error.message, retryAfter: error.retryAfter })
     } else {
-      console.error('[kairus]', error)
+      count('http.status.500')
+      log.error('http.failed', {
+        route: key,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
       json(res, 500, { error: 'quelque chose a cédé de notre côté' })
     }
   }
+
+  log.debug('http', {
+    route: key,
+    status: res.statusCode,
+    ms: Math.round(performance.now() - startedAt),
+  })
   return true
+}
+
+/** Prometheus scrape, same guard as the JSON snapshot. */
+export function metricsText(token: string | null): string | null {
+  const secret = process.env.METRICS_TOKEN?.trim()
+  if (!secret || token !== secret) return null
+  return asPrometheus()
 }

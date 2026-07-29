@@ -7,6 +7,8 @@ import { attachRealtime } from './realtime.js'
 import { serveClient } from './static.js'
 import { applySecurityHeaders } from './headers.js'
 import { startBackups } from './backup.js'
+import { log } from './log.js'
+import { pushEnabled } from './push.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const clientRoot = process.env.CLIENT_DIST ?? resolve(here, '../../client/dist')
@@ -26,10 +28,11 @@ const closeRealtime = attachRealtime(server, env.trustProxy)
 const stopBackups = startBackups()
 
 server.listen(env.port, env.host, () => {
-  console.log(`[kairus] listening on http://${env.host}:${env.port}`)
+  log.info('listening', { host: env.host, port: env.port, push: pushEnabled })
 })
 
 const shutdown = () => {
+  log.info('shutting down')
   stopBackups()
   closeRealtime()
   server.close(() => process.exit(0))

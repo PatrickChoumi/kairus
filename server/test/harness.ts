@@ -83,6 +83,8 @@ export const socketOrigin = () => origin.replace('http://', 'ws://')
 /** Every table emptied, so one case cannot see another's leftovers. */
 export function wipe(): void {
   db.exec(`
+    DELETE FROM push_subscriptions;
+    DELETE FROM blocks;
     DELETE FROM messages;
     DELETE FROM participants;
     DELETE FROM conversations;
@@ -91,7 +93,7 @@ export function wipe(): void {
   resetLimits()
 }
 
-type Account = { token: string; user: { id: string; handle: string; name: string } }
+export type Account = { token: string; user: { id: string; handle: string; name: string } }
 
 export async function register(handle: string, password = 'a-long-enough-phrase'): Promise<Account> {
   const reply = await call<Account>('POST', '/api/auth/register', {

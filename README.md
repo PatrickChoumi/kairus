@@ -69,6 +69,11 @@ n'ait qu'un seul endroit où se poser. Thèmes clair et sombre, avec respect de
   pendant une coupure
 - PWA installable, avec service worker (la coquille est mise en cache, jamais
   les messages)
+- **Notifications hors de l'application** : quand personne n'est connecté au
+  bout du fil, le serveur pousse le message au navigateur, qui l'affiche même
+  l'onglet fermé. Onglet simplement caché, c'est la page elle-même qui le dit.
+- **Journaux structurés et compteurs** : une ligne de JSON par événement, et un
+  point de mesure derrière un jeton
 - Clavier de bout en bout : `⌘K`, `↑`/`↓` ou `j`/`k`, `Entrée`, `Échap`, et `↑`
   dans un champ vide pour reprendre son dernier message
 
@@ -120,6 +125,15 @@ tenter d'ouvrir une conversation avec quelqu'un qui vous a bloqué répond
 « personne ne porte ce nom » — confirmer l'existence du compte renseignerait le
 harceleur.
 
+**Notifications.** Le contenu poussé est chiffré de bout en bout entre le
+serveur et le navigateur : le service de push au milieu relaie des octets qu'il
+ne peut pas lire. `PUSH_PREVIEW=0` retire quand même l'expéditeur et le texte
+de l'écran verrouillé, pour qui préfère. Un abonnement que le service déclare
+périmé est supprimé aussitôt ; un qui échoue trois fois de suite est abandonné.
+La permission n'est **jamais** demandée au chargement — seulement quand on la
+choisit depuis le Curseur, parce qu'une demande non sollicitée se fait refuser
+une fois et bloque la fonctionnalité pour de bon.
+
 **Sauvegardes.** Avec `BACKUP_DIR`, le serveur prend un instantané cohérent au
 démarrage puis toutes les 24 h, et ne garde que les sept derniers. Une
 sauvegarde qui tourne sans qu'on y pense vaut mieux qu'une procédure
@@ -169,17 +183,19 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 79 tests : 50 côté serveur, 29 côté client
+npm test                   # 104 tests : 62 côté serveur, 42 côté client
 npm run typecheck          # serveur et client
 ```
 
 **Serveur** (`node:test`, serveur réel, base en mémoire) : limitation de débit,
 révocation de jeton, récupération de compte, permissions sur les messages — on
 ne réécrit pas les mots d'un autre —, recherche et sa robustesse, blocage,
-en-têtes de sécurité, sauvegardes, et le WebSocket sous charge et à l'éviction.
+en-têtes de sécurité, sauvegardes, abonnements push et compteurs, et le
+WebSocket sous charge et à l'éviction.
 
-**Client** (`vitest`, jsdom) : le lien temps réel et la réconciliation
-optimiste, c'est-à-dire les deux endroits où une messagerie casse en silence —
+**Client** (`vitest`, jsdom) : la souscription aux notifications, le lien temps
+réel et la réconciliation optimiste, c'est-à-dire les endroits où une messagerie
+casse en silence —
 la file d'attente hors ligne, le repli exponentiel, la reprise au réveil de
 l'onglet, le remplacement du message optimiste par son écho, la déduplication,
 et le fait qu'une correction ne re-trie pas la liste ni ne marque quoi que ce
@@ -215,6 +231,10 @@ après mise en ligne, et la bonne façon de sauvegarder une base en mode WAL.
 | `CORS_ORIGIN` | Seulement si le client est servi depuis une autre origine.         |
 | `CLIENT_DIST` | Chemin du client compilé. Déduit du dossier du serveur par défaut. |
 | `BACKUP_DIR`  | Active les sauvegardes automatiques. Non défini, il n'y en a aucune. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Activent les notifications hors application. `npm run vapid --prefix server` les génère. Absentes, le push est simplement éteint. |
+| `PUSH_PREVIEW` | `0` pour ne rien révéler sur l'écran verrouillé.                  |
+| `METRICS_TOKEN` | Ouvre `/api/metrics`. Non défini, la route répond 404.           |
+| `LOG_LEVEL`, `LOG_FORMAT` | `info` par défaut ; `LOG_FORMAT=pretty` pour un terminal. |
 | `TRUST_PROXY` | Nombre de proxys devant le serveur. `0` par défaut. Mettre `1` derrière Railway, Fly ou un reverse proxy, sinon la limitation de débit voit une seule adresse pour tout le monde. |
 
 Côté client, `VITE_API_URL` n'est utile que pour un déploiement séparé du
@@ -236,6 +256,8 @@ server/
   src/limiter.ts   token buckets, et toute la politique de limites en un lieu
   src/headers.ts   CSP et en-têtes de sécurité, hachage du script inline
   src/backup.ts    instantanés cohérents, planifiés et élagués
+  src/push.ts      Web Push : abonnements, envoi, élagage des appareils morts
+  src/log.ts       journaux JSON et compteurs, sans dépendance
   src/router.ts    routes HTTP sur node:http, sans framework
   src/realtime.ts  hub WebSocket : présence, diffusion, battement de cœur
   src/static.ts    service du client compilé en production
@@ -265,7 +287,9 @@ Les messages passent par le WebSocket, mais tout est aussi accessible en HTTP.
 | `POST /api/account/revoke`         | Fermer toutes les autres sessions       |
 | `GET`/`POST /api/blocks`           | Lister ou bloquer quelqu'un             |
 | `POST /api/blocks/remove`          | Débloquer                               |
+| `GET`/`POST /api/push`             | Clé publique, abonner ou désabonner un appareil |
 | `GET /api/health`                  | Sonde de disponibilité                  |
+| `GET /api/metrics`                 | Compteurs, derrière `METRICS_TOKEN`     |
 
 ### Le protocole WebSocket
 
@@ -286,8 +310,6 @@ dessus :
   Kairus protège l'accès, pas le contenu.
 - **Pièces jointes.** Texte uniquement — ni image, ni fichier, ni voix.
 - **Groupes.** Conversations à deux seulement.
-- **Notifications push.** Le service worker ne met en cache que la coquille ;
-  onglet fermé, rien n'arrive.
 - **Modération.** Le blocage existe désormais, mais il n'y a ni signalement, ni
   administration, ni recours.
 - **Mise à l'échelle horizontale.** Le hub temps réel et les compteurs de
@@ -295,6 +317,8 @@ dessus :
   instances cesseraient de se voir. C'est un plafond d'architecture, pas un
   réglage.
 - **Second facteur** et vérification des phrases secrètes contre les fuites.
-- **Observabilité.** Un `console.error` est toute la télémétrie. Aucun log
-  structuré, aucune métrique, aucune alerte.
+- **Alerting.** Il y a désormais des journaux structurés et des compteurs, mais
+  rien ne vous réveille : il faut brancher un collecteur dessus.
+- **Récupération par email.** Toujours pas. Perdre la phrase de secours en même
+  temps que la phrase secrète reste sans recours.
 - **Appels.**

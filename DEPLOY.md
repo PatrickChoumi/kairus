@@ -37,6 +37,23 @@ silencieux.
 
 ---
 
+## Étape 1 bis — les clés de notification
+
+Sans elles, le push est simplement éteint et tout le reste fonctionne. Avec :
+
+```bash
+npm run vapid --prefix server
+```
+
+Trois lignes sortent : `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+`VAPID_SUBJECT` (mettez-y une adresse de contact réelle — c'est ce que les
+services de push utilisent pour vous joindre en cas de problème).
+
+**Générez-les une fois.** Les remplacer invalide tous les abonnements
+existants : chacun devra réactiver les notifications.
+
+---
+
 ## Étape 2 — choisir un hôte
 
 ### A. Railway — le plus court chemin
@@ -52,6 +69,8 @@ sonde `/api/health`.
    - `JWT_SECRET` = la sortie de l'étape 1
    - `TRUST_PROXY` = `1`
    - `BACKUP_DIR` = `/data/backups` — sans ça, aucune sauvegarde n'est prise
+   - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — étape 1 bis
+   - `METRICS_TOKEN` = une chaîne aléatoire, si vous voulez scraper les compteurs
 4. **Settings → Volumes → New Volume**, point de montage **`/data`**.
    Sans ça, chaque redéploiement efface tous les comptes et tous les messages.
    Le `Dockerfile` ne déclare volontairement **pas** d'instruction `VOLUME` :
@@ -70,7 +89,8 @@ sonde `/api/health`.
 ```bash
 fly launch --no-deploy          # ne PAS accepter la base Postgres proposée
 fly volumes create kairus_data --size 1 --region cdg
-fly secrets set JWT_SECRET=<la sortie de l'étape 1>
+fly secrets set JWT_SECRET=<la sortie de l'étape 1> \
+  VAPID_PUBLIC_KEY=<...> VAPID_PRIVATE_KEY=<...> VAPID_SUBJECT=mailto:vous@exemple.fr
 fly deploy
 ```
 
@@ -137,6 +157,7 @@ docker run -d --name kairus --restart unless-stopped \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
   -e TRUST_PROXY=1 \
   -e BACKUP_DIR=/data/backups \
+  -e VAPID_PUBLIC_KEY=... -e VAPID_PRIVATE_KEY=... -e VAPID_SUBJECT=mailto:vous@exemple.fr \
   -v kairus-data:/data \
   kairus
 ```
@@ -189,6 +210,8 @@ server {
 | `PORT`        | fourni par l'hôte             | Railway et Fly l'injectent. Ne le figez pas.                                                                   |
 | `NODE_ENV`    | `production`                  | Déjà posé par le `Dockerfile`.                                                                                 |
 | `BACKUP_DIR`  | `/data/backups`               | Non défini : **aucune sauvegarde n'est prise**. C'est la différence entre un incident et une perte définitive.  |
+| `VAPID_*`     | la sortie de l'étape 1 bis    | Absentes : pas de notification hors application. Changées : tous les abonnements existants meurent.             |
+| `METRICS_TOKEN` | une chaîne aléatoire        | Non défini : `/api/metrics` répond 404. Ne le publiez pas — il expose vos compteurs de connexion.               |
 | `CORS_ORIGIN` | **laisser vide**              | Inutile ici : le client est servi par le même serveur. Ne le remplissez que pour un front hébergé ailleurs.     |
 
 ---
@@ -219,7 +242,13 @@ curl -s -X POST https://kairus.example.com/api/auth/register \
   -d '{"handle":"essai","name":"Essai","password":"une-phrase-assez-longue"}'
 # ↑ renvoie un token et une recoveryPhrase
 
-# 6. La limitation de débit mord
+# 6. Les notifications sont configurées (401 = la route existe, il faut une session)
+curl -s -o /dev/null -w '%{http_code}\n' https://kairus.example.com/api/push
+
+# 7. Les compteurs répondent
+curl -s "https://kairus.example.com/api/metrics?token=<METRICS_TOKEN>"
+
+# 8. La limitation de débit mord
 for i in $(seq 1 12); do
   curl -s -o /dev/null -w "%{http_code} " -X POST \
     https://kairus.example.com/api/auth/login \
@@ -234,8 +263,25 @@ comptes, écrivez de l'une à l'autre. Si le message arrive sans recharger la
 page, les WebSockets passent le proxy. Si vous devez recharger, c'est l'`Upgrade`
 du reverse proxy qui manque.
 
-Le HTTPS n'est pas optionnel : sans lui, ni le service worker, ni l'installation
-en PWA, ni le bouton « copier » de la phrase de secours ne fonctionnent.
+Puis testez les notifications pour de vrai : ouvrez `⌘K`, choisissez « être
+prévenu même l'application fermée », acceptez la demande du navigateur, **fermez
+l'onglet**, et faites-vous écrire depuis une autre session. La notification doit
+arriver ; cliquer dessus doit rouvrir la bonne conversation.
+
+Le HTTPS n'est pas optionnel : sans lui, ni le service worker, ni les
+notifications, ni l'installation en PWA, ni le bouton « copier » de la phrase de
+secours ne fonctionnent. Le push exige une origine sécurisée, sans exception.
+
+### Observer
+
+Les journaux sont du JSON, une ligne par événement :
+
+```bash
+docker logs -f kairus | jq -c 'select(.level != "debug")'
+```
+
+Ce qui mérite une alerte : `backup.failed`, `push.failed` en rafale,
+`http.status.500`, et `socket.flooded` répété depuis une même adresse.
 
 ---
 
@@ -323,3 +369,5 @@ Sur Railway et Fly, un `git push` sur la branche suivie suffit.
 - **`BACKUP_DIR` non défini** — aucune sauvegarde n'est prise, et vous ne le
   découvrirez que le jour où vous en cherchez une.
 - **`VOLUME` réintroduit dans le `Dockerfile`** — Railway refuse de construire.
+- **Clés VAPID régénérées** — tous les abonnements aux notifications meurent
+  d'un coup, et personne ne comprend pourquoi il ne reçoit plus rien.

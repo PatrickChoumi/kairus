@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { log } from './log.js'
 
 const isProd = process.env.NODE_ENV === 'production'
 
@@ -11,7 +12,7 @@ function requiredSecret(): string {
   // Dev only: an ephemeral secret. Restarting the server invalidates sessions,
   // which is the correct behaviour for a throwaway key.
   const generated = randomBytes(32).toString('hex')
-  console.warn('[kairus] JWT_SECRET unset — using an ephemeral development secret')
+  log.warn('jwt.secret.ephemeral', { note: 'development only — sessions die on restart' })
   return generated
 }
 

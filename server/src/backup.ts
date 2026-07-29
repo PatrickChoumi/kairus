@@ -1,6 +1,7 @@
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { db } from './db.js'
+import { log } from './log.js'
 
 /*
  * Backups.
@@ -64,10 +65,10 @@ export function startBackups(): () => void {
     try {
       const target = await takeBackup(directory)
       const kept = prune(directory)
-      console.log(`[kairus] backup ${target} (${kept.length} kept)`)
+      log.info('backup', { target, kept: kept.length })
     } catch (error) {
       // A failed backup must never take the server down with it.
-      console.error('[kairus] backup failed:', error)
+      log.error('backup.failed', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 

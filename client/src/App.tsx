@@ -19,6 +19,28 @@ export function App() {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
+  // Arriving from a notification: open what it was about, once and only once.
+  useEffect(() => {
+    if (status !== 'in') return
+
+    const openFromUrl = () => {
+      const wanted = new URLSearchParams(location.search).get('c')
+      if (!wanted) return
+      history.replaceState(null, '', location.pathname)
+      useStore.getState().enter(wanted)
+    }
+    openFromUrl()
+
+    const fromWorker = (event: MessageEvent) => {
+      const data = event.data as { t?: string; conversation?: string } | null
+      if (data?.t === 'open-conversation' && data.conversation) {
+        useStore.getState().enter(data.conversation)
+      }
+    }
+    navigator.serviceWorker?.addEventListener('message', fromWorker)
+    return () => navigator.serviceWorker?.removeEventListener('message', fromWorker)
+  }, [status])
+
   return (
     <>
       {status === 'booting' && <div className="waking" aria-label="chargement" />}

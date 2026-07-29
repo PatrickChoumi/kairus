@@ -97,6 +97,20 @@ export const api = {
   /** May hand back a fresher token when the current one is getting old. */
   me: () => request<{ user: User; token?: string }>('/api/me'),
 
+  push: () => request<{ enabled: boolean; key: string; devices: number }>('/api/push'),
+
+  pushSubscribe: (subscription: unknown) =>
+    request<{ devices: number }>('/api/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ subscription }),
+    }),
+
+  pushUnsubscribe: (endpoint: string) =>
+    request<{ devices: number }>('/api/push/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint }),
+    }),
+
   blocked: () => request<{ people: User[] }>('/api/blocks'),
 
   block: (handle: string) =>

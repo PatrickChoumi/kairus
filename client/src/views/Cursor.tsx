@@ -54,6 +54,9 @@ export function Cursor() {
   const block = useStore((s) => s.block)
   const unblock = useStore((s) => s.unblock)
   const loadBlocked = useStore((s) => s.loadBlocked)
+  const push = useStore((s) => s.push)
+  const togglePush = useStore((s) => s.togglePush)
+  const refreshPush = useStore((s) => s.refreshPush)
   const leave = useStore((s) => s.leave)
   const signOut = useStore((s) => s.signOut)
   const notify = useStore((s) => s.notify)
@@ -106,9 +109,10 @@ export function Cursor() {
       return
     }
     void loadBlocked()
+    void refreshPush()
     const id = requestAnimationFrame(() => field.current?.focus())
     return () => cancelAnimationFrame(id)
-  }, [shown, loadBlocked])
+  }, [shown, loadBlocked, refreshPush])
 
   // Remote lookups are debounced; local matches are instant.
   useEffect(() => {
@@ -237,6 +241,27 @@ export function Cursor() {
             },
           ]
         : []),
+      ...(push === 'unsupported'
+        ? []
+        : [
+            {
+              key: 'x:push',
+              group: 'réglages' as const,
+              label:
+                push === 'on'
+                  ? 'ne plus être prévenu hors de l’application'
+                  : 'être prévenu même l’application fermée',
+              hint:
+                push === 'refused'
+                  ? 'le navigateur a refusé — à réautoriser dans ses réglages'
+                  : push === 'unconfigured'
+                    ? 'non configuré sur ce serveur'
+                    : push === 'failed'
+                      ? 'échec de l’abonnement — navigation privée ?'
+                      : 'notifications',
+              run: () => void togglePush(),
+            },
+          ]),
       {
         key: 'x:passphrase',
         group: 'réglages',
@@ -311,6 +336,8 @@ export function Cursor() {
     reading,
     openId,
     openPeer,
+    push,
+    togglePush,
     blocked,
     block,
     unblock,

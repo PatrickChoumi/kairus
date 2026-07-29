@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api, ApiError, getToken, setToken } from '../net/api'
 import { connection, type Link } from '../net/socket'
+import { disablePush, enablePush, pushState, type PushState } from '../net/push'
 import type { Conversation, Message, User } from '../net/types'
 
 export type Theme = 'dark' | 'light'
@@ -23,6 +24,8 @@ type State = {
   online: Record<string, boolean>
 
   blocked: User[]
+  /** Whether this browser will be reached when the application is closed. */
+  push: PushState
 
   theme: Theme
   reading: boolean
@@ -49,6 +52,9 @@ type Actions = {
   retract: (message: Message) => void
   breathe: () => void
   older: () => Promise<void>
+
+  refreshPush: () => Promise<void>
+  togglePush: () => Promise<void>
 
   block: (handle: string) => Promise<void>
   unblock: (handle: string) => Promise<void>
@@ -77,6 +83,25 @@ const storedTheme = (): Theme => {
 let typingSentAt = 0
 const typingTimers = new Map<string, number>()
 
+/**
+ * A notification raised by the page itself. The server only pushes to people
+ * with no live socket; a backgrounded tab still has one, so without this a
+ * hidden tab would stay silent.
+ */
+function announce(message: Message, conversations: Conversation[]): void {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+  const from = conversations.find((c) => c.id === message.conversationId)?.peer.name ?? 'Kairus'
+  try {
+    new Notification(from, {
+      body: message.body.slice(0, 180),
+      icon: '/mark.svg',
+      tag: `kairus-${message.conversationId}`,
+    })
+  } catch {
+    // Some browsers only allow this from a service worker; silence is fine.
+  }
+}
+
 export const useStore = create<State & Actions>((set, get) => {
   /** Newest conversation first, which is the only order that makes sense here. */
   const reorder = (list: Conversation[]) =>
@@ -95,6 +120,10 @@ export const useStore = create<State & Actions>((set, get) => {
 
     const mine = message.senderId === state.me?.id
     const looking = state.open === message.conversationId && document.visibilityState === 'visible'
+
+    // The socket is alive, so the server did not push: with the tab merely
+    // hidden, this side is the one that has to speak up.
+    if (!mine && document.visibilityState === 'hidden') announce(message, state.conversations)
 
     set({
       messages: { ...state.messages, [message.conversationId]: next },
@@ -264,6 +293,7 @@ export const useStore = create<State & Actions>((set, get) => {
     typing: {},
     online: {},
     blocked: [],
+    push: 'off',
     theme: storedTheme(),
     reading: false,
     cursor: false,
@@ -297,6 +327,29 @@ export const useStore = create<State & Actions>((set, get) => {
       land(token, user)
       // Shown once. There is no email to send it to, so it is this or nothing.
       set({ keepsake: recoveryPhrase })
+    },
+
+    async refreshPush() {
+      set({ push: await pushState() })
+    },
+
+    async togglePush() {
+      const before = get().push
+      try {
+        const after = before === 'on' ? await disablePush() : await enablePush()
+        set({ push: after, cursor: false })
+        const said: Record<PushState, string> = {
+          on: 'vous serez prévenu même l’application fermée',
+          off: 'notifications désactivées',
+          refused: 'le navigateur a refusé — à réautoriser dans ses réglages',
+          failed: 'le navigateur n’a pas pu s’abonner — navigation privée ?',
+          unsupported: 'ce navigateur ne sait pas recevoir de notifications',
+          unconfigured: 'les notifications ne sont pas configurées sur ce serveur',
+        }
+        set({ notice: said[after] })
+      } catch (error) {
+        set({ notice: error instanceof ApiError ? error.message : 'impossible pour l’instant' })
+      }
     },
 
     async block(handle) {
