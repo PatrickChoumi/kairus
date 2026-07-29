@@ -49,10 +49,12 @@ const message = (over: Partial<Record<string, unknown>> = {}) => ({
 
 const conversation = (over = {}) => ({
   id: 'c1',
-  peer: PEER,
+  kind: 'direct' as const,
+  face: { id: PEER.id, name: PEER.name, hue: PEER.hue },
+  members: [PEER],
   lastMessage: null,
   unread: 0,
-  peerReadAt: 0,
+  readAt: 0,
   ...over,
 })
 
@@ -226,6 +228,30 @@ describe('corrections', () => {
 
     useStore.getState().retract(theirs)
     expect(sent.some((f) => (f as { t: string }).t === 'retract')).toBe(false)
+  })
+})
+
+describe('leaving a conversation behind', () => {
+  it('drops it from the list, and closes it if you were in it', () => {
+    useStore.setState({
+      conversations: [conversation({ id: 'c1' }), conversation({ id: 'c2' })],
+      open: 'c1',
+    })
+
+    deliver({ t: 'gone', conversation: 'c1' })
+    expect(rail().map((c) => c.id)).toEqual(['c2'])
+    expect(useStore.getState().open).toBeNull()
+  })
+
+  it('leaves you where you are if it was some other conversation', () => {
+    useStore.setState({
+      conversations: [conversation({ id: 'c1' }), conversation({ id: 'c2' })],
+      open: 'c1',
+    })
+
+    deliver({ t: 'gone', conversation: 'c2' })
+    expect(useStore.getState().open).toBe('c1')
+    expect(rail()).toHaveLength(1)
   })
 })
 

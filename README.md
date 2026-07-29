@@ -13,9 +13,9 @@ et un champ.
 ## Le parti pris
 
 **Une seule surface.** La liste et la conversation ne sont pas deux écrans mais
-deux états d'une même surface. Quand vous ouvrez un fil, la marque de la
-personne quitte sa ligne dans la liste et se pose sur l'en-tête du fil, portée
-par un ressort. Rien d'autre ne bouge indépendamment : c'est ce qui fait lire
+deux états d'une même surface. Quand vous ouvrez un fil, sa marque — le visage
+d'une personne, ou la couleur d'un groupe — quitte sa ligne dans la liste et se
+pose sur l'en-tête du fil, portée par un ressort. Rien d'autre ne bouge indépendamment : c'est ce qui fait lire
 les deux vues comme un seul lieu plutôt que comme une navigation.
 
 **Zéro chrome.** Au repos, aucun bouton n'est visible. Le bouton d'envoi
@@ -55,6 +55,10 @@ n'ait qu'un seul endroit où se poser. Thèmes clair et sombre, avec respect de
 
 - Inscription et connexion (JWT, mots de passe hachés en bcrypt)
 - Conversations directes, créées en tapant un nom d'usage
+- **Groupes** : un nom, des noms d'usage, et c'est ouvert. Qui parle est dit en
+  tête de chaque prise de parole, dans sa propre couleur. Quelqu'un ajouté
+  aujourd'hui **ne lit pas ce qui s'est dit avant** — ni dans le fil, ni dans la
+  recherche. On les quitte ; le dernier sorti emporte le groupe avec lui
 - Messages en temps réel par WebSocket, avec envoi optimiste et réconciliation
 - Correction et retrait d'un message, propagés aux deux côtés ; un message
   retiré garde sa place pour que les citations continuent de résoudre
@@ -122,7 +126,9 @@ qui vous avez déjà une conversation, seul un **nom d'usage exact** résout —
 il faut vous l'avoir donné. Un annuaire parcourable plus une boîte ouverte,
 c'est un outil de harcèlement clé en main.
 
-**Blocage.** Réciproque et immédiat : il ferme aussi les conversations déjà
+**Blocage.** Il gouverne les conversations à deux. Dans un groupe, un blocage
+entre deux membres ne fait pas taire toute la pièce — la sortie d'un groupe,
+c'est de le quitter. Réciproque et immédiat : il ferme aussi les conversations déjà
 ouvertes, coupe la présence et la frappe dans les deux sens, et rend chacun
 invisible à la recherche de l'autre. Un blocage se présente comme une absence :
 tenter d'ouvrir une conversation avec quelqu'un qui vous a bloqué répond
@@ -197,7 +203,7 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 121 tests : 79 côté serveur, 42 côté client
+npm test                   # 141 tests : 97 côté serveur, 44 côté client
 npm run typecheck          # serveur et client
 ```
 
@@ -206,7 +212,9 @@ révocation de jeton, récupération de compte, permissions sur les messages —
 ne réécrit pas les mots d'un autre —, recherche et sa robustesse, blocage,
 en-têtes de sécurité, sauvegardes, abonnements push et compteurs, pièces
 jointes — qui peut les lire, ce qui n'est jamais affiché en place, ce qui est
-balayé —, et le WebSocket sous charge et à l'éviction.
+balayé —, groupes — l'historique qui ne s'hérite pas, la marque de lecture qui
+attend le dernier, ce qu'un tiers ne peut pas faire —, et le WebSocket sous
+charge et à l'éviction.
 
 **Client** (`vitest`, jsdom) : la souscription aux notifications, le lien temps
 réel et la réconciliation optimiste, c'est-à-dire les endroits où une messagerie
@@ -295,7 +303,9 @@ Les messages passent par le WebSocket, mais tout est aussi accessible en HTTP.
 | `POST /api/auth/register`, `login` | Obtenir un jeton                        |
 | `POST /api/auth/recover`           | Reprendre un compte avec la phrase de secours |
 | `GET /api/me`                      | L'identité derrière le jeton            |
-| `GET`/`POST /api/conversations`    | Lister ou ouvrir une conversation       |
+| `GET`/`POST /api/conversations`    | Lister ou ouvrir une conversation à deux |
+| `POST /api/groups`                 | Réunir un groupe                        |
+| `POST /api/groups/members`, `/leave`, `/rename` | Ajouter, quitter, renommer |
 | `GET`/`POST /api/messages`         | Lire l'historique ou déposer un message |
 | `POST /api/messages/revise`, `/retract` | Corriger ou retirer son propre message |
 | `POST /api/read`                   | Marquer comme lu                        |
@@ -328,7 +338,6 @@ dessus :
 - **Chiffrement de bout en bout.** Les messages sont en clair dans SQLite.
   Kairus protège l'accès, pas le contenu.
 - **Messages vocaux.** Les fichiers passent, mais rien n'enregistre.
-- **Groupes.** Conversations à deux seulement.
 - **Modération.** Le blocage existe désormais, mais il n'y a ni signalement, ni
   administration, ni recours.
 - **Mise à l'échelle horizontale.** Le hub temps réel et les compteurs de

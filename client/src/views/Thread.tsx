@@ -16,11 +16,21 @@ type Props = {
 
 const NEAR_BOTTOM = 120
 
+/** What the line under the name says, which is never the word "online". */
+function presence(conversation: Conversation, online: number, typing: boolean): string {
+  if (typing) return 'écrit…'
+  if (conversation.kind === 'group') {
+    const total = conversation.members.length + 1
+    return online > 0 ? `${online} sur ${total} · là` : `${total} personnes`
+  }
+  return online > 0 ? 'là' : `@${conversation.members[0]?.handle ?? ''}`
+}
+
 export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props) {
   const me = useStore((s) => s.me)
   const messages = useThread(conversation.id)
   const typing = useStore((s) => Boolean(s.typing[conversation.id]))
-  const online = useStore((s) => Boolean(s.online[conversation.peer.id]))
+  const online = useStore((s) => conversation.members.filter((m) => s.online[m.id]).length)
   const reading = useStore((s) => s.reading)
   const older = useStore((s) => s.older)
   const setReply = useStore((s) => s.reply)
@@ -82,6 +92,10 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   if (!me) return null
 
   const byId = new Map(messages.map((m) => [m.id, m]))
+  const nameOf = (id: string): string =>
+    id === me.id ? 'vous' : (conversation.members.find((m) => m.id === id)?.name ?? 'quelqu’un')
+  const hueOf = (id: string): number | null =>
+    conversation.members.find((m) => m.id === id)?.hue ?? null
   const lastMine = [...messages]
     .reverse()
     .find((m) => m.senderId === me.id && !m.pending && !m.deletedAt)
@@ -91,18 +105,16 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
       <header className="thread__head" ref={head}>
         <button className="thread__back" onClick={onLeave} aria-label="revenir">
           <Sigil
-            user={conversation.peer}
+            user={conversation.face}
             size={38}
-            present={online}
+            present={online > 0}
             stirring={typing}
             innerRef={headSigil}
             hidden={sigilHidden}
           />
           <span className="thread__who">
-            <span className="thread__name">{conversation.peer.name}</span>
-            <span className="thread__state">
-              {typing ? 'écrit…' : online ? 'là' : `@${conversation.peer.handle}`}
-            </span>
+            <span className="thread__name">{conversation.face.name}</span>
+            <span className="thread__state">{presence(conversation, online, typing)}</span>
           </span>
           <span className="thread__caret" aria-hidden="true">
             ‹
@@ -148,13 +160,17 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
                   opens={opens}
                   closes={closes}
                   quoted={quoted}
-                  quotedAuthor={
-                    quoted ? (quoted.senderId === me.id ? 'vous' : conversation.peer.name) : null
+                  quotedAuthor={quoted ? nameOf(quoted.senderId) : null}
+                  author={
+                    // In a group you need to know who is speaking; in a
+                    // conversation with one other person you already do.
+                    conversation.kind === 'group' && !mine && opens
+                      ? nameOf(message.senderId)
+                      : null
                   }
+                  authorHue={hueOf(message.senderId)}
                   read={
-                    mine &&
-                    message.id === lastMine?.id &&
-                    conversation.peerReadAt >= message.createdAt
+                    mine && message.id === lastMine?.id && conversation.readAt >= message.createdAt
                   }
                   onReply={setReply}
                   onEdit={setEdit}
@@ -175,7 +191,7 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
         </div>
       </div>
 
-      <Composer peerName={conversation.peer.name} />
+      <Composer peerName={conversation.face.name} />
 
       <Lightbox
         attachment={looking?.attachment ?? null}

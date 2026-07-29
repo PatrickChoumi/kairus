@@ -35,18 +35,25 @@ export type Message = {
   preview?: string
 }
 
+/** What a conversation shows as: a person for a direct one, a name for a group. */
+export type Face = { id: string; name: string; hue: number }
+
 export type Conversation = {
   id: string
-  peer: User
+  kind: 'direct' | 'group'
+  face: Face
+  /** Everyone in it but you. */
+  members: User[]
   lastMessage: Message | null
   unread: number
-  peerReadAt: number
+  /** When the last of the others had read up to. */
+  readAt: number
 }
 
 export type SearchHit = {
   message: Message
   conversationId: string
-  peer: User
+  face: Face
 }
 
 export type Inbound =
@@ -58,4 +65,6 @@ export type Inbound =
   | { t: 'read'; conversation: string; userId: string; at: number }
   | { t: 'presence'; userId: string; online: boolean }
   | { t: 'conversation'; conversation: Conversation }
+  /** A conversation that is no longer yours: you left it, or it dissolved. */
+  | { t: 'gone'; conversation: string }
   | { t: 'error'; message: string; retryAfter?: number; code?: 'expired' }

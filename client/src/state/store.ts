@@ -46,6 +46,10 @@ type Actions = {
   enter: (conversationId: string) => void
   leave: () => void
   startWith: (handle: string) => Promise<string | null>
+  gather: (title: string, handles: string[]) => Promise<void>
+  invite: (conversationId: string, handle: string) => Promise<void>
+  leaveGroup: (conversationId: string) => Promise<void>
+  renameGroup: (conversationId: string, title: string) => Promise<void>
 
   say: (body: string) => void
   /** Sends one or more files, each as its own message. */
@@ -94,10 +98,17 @@ const typingTimers = new Map<string, number>()
  */
 function announce(message: Message, conversations: Conversation[]): void {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
-  const from = conversations.find((c) => c.id === message.conversationId)?.peer.name ?? 'Kairus'
+  const conversation = conversations.find((c) => c.id === message.conversationId)
+  const speaker = conversation?.members.find((m) => m.id === message.senderId)
+  // In a group the title is the notification; who spoke belongs in the body.
+  const from = conversation?.face.name ?? 'Kairus'
+  const said =
+    conversation?.kind === 'group' && speaker
+      ? `${speaker.name} : ${message.body}`
+      : message.body
   try {
     new Notification(from, {
-      body: message.body.slice(0, 180),
+      body: said.slice(0, 180),
       icon: '/mark.svg',
       tag: `kairus-${message.conversationId}`,
     })
@@ -246,9 +257,16 @@ export const useStore = create<State & Actions>((set, get) => {
           set((s) => ({
             conversations: s.conversations.map((c) =>
               c.id === event.conversation && event.userId !== s.me?.id
-                ? { ...c, peerReadAt: Math.max(c.peerReadAt, event.at) }
+                ? { ...c, readAt: Math.max(c.readAt, event.at) }
                 : c,
             ),
+          }))
+          break
+
+        case 'gone':
+          set((s) => ({
+            conversations: s.conversations.filter((c) => c.id !== event.conversation),
+            open: s.open === event.conversation ? null : s.open,
           }))
           break
 
@@ -470,6 +488,39 @@ export const useStore = create<State & Actions>((set, get) => {
         set({ notice: error instanceof ApiError ? error.message : 'impossible d’ouvrir cela' })
         return null
       }
+    },
+
+    /** Starts a group. Handles are taken as written, minus any leading @. */
+    async gather(title, handles) {
+      const { conversation } = await api.createGroup(
+        title,
+        handles.map((h) => h.replace(/^@/, '').trim().toLowerCase()).filter(Boolean),
+      )
+      set((s) =>
+        s.conversations.some((c) => c.id === conversation.id)
+          ? {}
+          : { conversations: reorder([conversation, ...s.conversations]) },
+      )
+      get().enter(conversation.id)
+    },
+
+    async invite(conversationId, handle) {
+      const { member } = await api.addToGroup(conversationId, handle.replace(/^@/, '').toLowerCase())
+      set({ notice: `${member.name} a rejoint le groupe` })
+    },
+
+    async leaveGroup(conversationId) {
+      await api.leaveGroup(conversationId)
+      set((s) => ({
+        conversations: s.conversations.filter((c) => c.id !== conversationId),
+        open: s.open === conversationId ? null : s.open,
+        cursor: false,
+      }))
+    },
+
+    async renameGroup(conversationId, title) {
+      const renamed = await api.renameGroup(conversationId, title)
+      set({ notice: `le groupe s’appelle « ${renamed.title} »` })
     },
 
     say(body) {

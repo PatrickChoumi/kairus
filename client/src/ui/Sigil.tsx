@@ -1,8 +1,9 @@
 import type { CSSProperties, Ref } from 'react'
-import type { User } from '../net/types'
+import type { Face } from '../net/types'
 
 type Props = {
-  user: User
+  /** Anything with a name and a colour: a person, or a group. */
+  user: Face
   size?: number
   /** A slow pulse when the other person is here. */
   present?: boolean
@@ -38,7 +39,7 @@ export function Sigil({ user, size = 40, present, stirring, innerRef, hidden }: 
       data-stirring={stirring || undefined}
       aria-hidden="true"
     >
-      <span className="sigil__face">{initial(user.name || user.handle)}</span>
+      <span className="sigil__face">{initial(user.name)}</span>
     </span>
   )
 }

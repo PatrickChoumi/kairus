@@ -4,7 +4,7 @@ import { api, ApiError } from '../net/api'
 import { Sigil } from '../ui/Sigil'
 import { SPRING } from '../motion/spring'
 import { useSpringTo } from '../motion/hooks'
-import type { SearchHit, User } from '../net/types'
+import type { Face, SearchHit, User } from '../net/types'
 
 const GROUPS = ['conversations', 'quelqu’un d’autre', 'dit plus tôt', 'bloqués', 'réglages'] as const
 type Group = (typeof GROUPS)[number]
@@ -14,7 +14,7 @@ type Item = {
   group: Group
   label: string
   hint?: string
-  face?: User
+  face?: Face
   /** True when choosing it starts a quest, which needs the Cursor to stay open. */
   keeps?: boolean
   run: () => void
@@ -49,7 +49,7 @@ export function Cursor() {
   const reading = useStore((s) => s.reading)
   const toggleReading = useStore((s) => s.toggleReading)
   const openId = useStore((s) => s.open)
-  const openPeer = useStore((s) => s.conversations.find((c) => c.id === s.open)?.peer ?? null)
+  const openOne = useStore((s) => s.conversations.find((c) => c.id === s.open) ?? null)
   const blocked = useStore((s) => s.blocked)
   const block = useStore((s) => s.block)
   const unblock = useStore((s) => s.unblock)
@@ -58,6 +58,10 @@ export function Cursor() {
   const togglePush = useStore((s) => s.togglePush)
   const refreshPush = useStore((s) => s.refreshPush)
   const leave = useStore((s) => s.leave)
+  const gather = useStore((s) => s.gather)
+  const invite = useStore((s) => s.invite)
+  const leaveGroup = useStore((s) => s.leaveGroup)
+  const renameGroup = useStore((s) => s.renameGroup)
   const signOut = useStore((s) => s.signOut)
   const notify = useStore((s) => s.notify)
   const changePassphrase = useStore((s) => s.changePassphrase)
@@ -153,23 +157,29 @@ export function Cursor() {
     const list: Item[] = []
 
     for (const conversation of conversations) {
-      if (
-        term &&
-        !fits(conversation.peer.name + ' ' + conversation.peer.handle, term.replace(/^@/, ''))
-      ) {
-        continue
-      }
+      const searchable = [
+        conversation.face.name,
+        ...conversation.members.map((m) => `${m.name} @${m.handle}`),
+      ].join(' ')
+      if (term && !fits(searchable, term.replace(/^@/, ''))) continue
       list.push({
         key: `c:${conversation.id}`,
         group: 'conversations',
-        label: conversation.peer.name,
-        hint: `@${conversation.peer.handle}`,
-        face: conversation.peer,
+        label: conversation.face.name,
+        hint:
+          conversation.kind === 'group'
+            ? `${conversation.members.length + 1} personnes`
+            : `@${conversation.members[0]?.handle ?? ''}`,
+        face: conversation.face,
         run: () => enter(conversation.id),
       })
     }
 
-    const known = new Set(conversations.map((c) => c.peer.id))
+    // Only a *direct* conversation makes someone already reachable. Sharing a
+    // group with them must not hide the way to write to them alone.
+    const known = new Set(
+      conversations.filter((c) => c.kind === 'direct').flatMap((c) => c.members.map((m) => m.id)),
+    )
     for (const person of people) {
       if (known.has(person.id)) continue
       list.push({
@@ -187,7 +197,7 @@ export function Cursor() {
         key: `m:${hit.message.id}`,
         group: 'dit plus tôt',
         label: hit.message.body,
-        hint: hit.peer.name,
+        hint: hit.face.name,
         run: () => enter(hit.conversationId),
       })
     }
@@ -230,14 +240,66 @@ export function Cursor() {
             },
           ]
         : []),
-      ...(openPeer
+      {
+        key: 'x:gather',
+        group: 'réglages',
+        label: 'réunir un groupe',
+        hint: 'un nom, puis les noms d’usage',
+        keeps: true,
+        run: () =>
+          setQuest({
+            title: 'réunir un groupe',
+            steps: [
+              { label: 'le nom du groupe' },
+              { label: 'les noms d’usage, séparés par des espaces' },
+            ],
+            run: ([title, handles]) => gather(title ?? '', (handles ?? '').split(/[\s,]+/)),
+          }),
+      },
+      ...(openOne?.kind === 'group'
+        ? [
+            {
+              key: 'x:invite',
+              group: 'réglages' as const,
+              label: 'ajouter quelqu’un au groupe',
+              hint: 'il ne verra pas ce qui s’est dit avant',
+              keeps: true,
+              run: () =>
+                setQuest({
+                  title: 'ajouter au groupe',
+                  steps: [{ label: 'son nom d’usage' }],
+                  run: ([handle]) => invite(openOne.id, handle ?? ''),
+                }),
+            },
+            {
+              key: 'x:rename',
+              group: 'réglages' as const,
+              label: 'renommer le groupe',
+              keeps: true,
+              run: () =>
+                setQuest({
+                  title: 'renommer le groupe',
+                  steps: [{ label: 'le nouveau nom' }],
+                  run: ([title]) => renameGroup(openOne.id, title ?? ''),
+                }),
+            },
+            {
+              key: 'x:quit',
+              group: 'réglages' as const,
+              label: 'quitter le groupe',
+              hint: 'vous n’y recevrez plus rien',
+              run: () => void guard(leaveGroup(openOne.id)),
+            },
+          ]
+        : []),
+      ...(openOne?.kind === 'direct' && openOne.members[0]
         ? [
             {
               key: 'x:block',
               group: 'réglages' as const,
-              label: `bloquer ${openPeer.name}`,
+              label: `bloquer ${openOne.members[0].name}`,
               hint: 'plus de messages, plus de présence, dans les deux sens',
-              run: () => void block(openPeer.handle),
+              run: () => void block(openOne.members[0]!.handle),
             },
           ]
         : []),
@@ -335,7 +397,11 @@ export function Cursor() {
     theme,
     reading,
     openId,
-    openPeer,
+    openOne,
+    gather,
+    invite,
+    leaveGroup,
+    renameGroup,
     push,
     togglePush,
     blocked,

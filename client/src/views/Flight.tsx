@@ -2,10 +2,10 @@ import { useEffect, useRef } from 'react'
 import { createSpring, lerp, SPRING } from '../motion/spring'
 import type { Rect } from '../motion/hooks'
 import { Sigil } from '../ui/Sigil'
-import type { User } from '../net/types'
+import type { Face } from '../net/types'
 
 type Props = {
-  user: User
+  user: Face
   from: Rect
   to: Rect
   onDone: () => void

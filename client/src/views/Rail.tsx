@@ -77,6 +77,8 @@ export function Rail({ onOpen, dimmed }: Props) {
             const last = conversation.lastMessage
             const mine = last?.senderId === me.id
             const stirring = Boolean(typing[conversation.id])
+            // A group is "here" when anyone in it is.
+            const present = conversation.members.some((m) => online[m.id])
             return (
               <li key={conversation.id} style={{ ['--i' as string]: index }}>
                 <button
@@ -87,14 +89,19 @@ export function Rail({ onOpen, dimmed }: Props) {
                   onClick={() => onOpen(conversation, sigils.current.get(conversation.id) ?? null)}
                 >
                   <Sigil
-                    user={conversation.peer}
+                    user={conversation.face}
                     size={44}
-                    present={online[conversation.peer.id]}
+                    present={present}
                     stirring={stirring}
                     innerRef={(el) => sigils.current.set(conversation.id, el)}
                   />
                   <span className="row__text">
-                    <span className="row__name">{conversation.peer.name}</span>
+                    <span className="row__name">
+                      {conversation.face.name}
+                      {conversation.kind === 'group' && (
+                        <span className="row__count">{conversation.members.length + 1}</span>
+                      )}
+                    </span>
                     <span className="row__last">
                       {stirring ? (
                         <em className="row__stirring">écrit…</em>

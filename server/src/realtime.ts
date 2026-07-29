@@ -4,6 +4,7 @@ import { limits } from './limiter.js'
 import {
   addMessage,
   blockedInConversation,
+  conversationKind,
   describeConversation,
   findLiveIdentity,
   findUser,
@@ -30,6 +31,8 @@ type Outbound =
   | { t: 'read'; conversation: string; userId: string; at: number }
   | { t: 'presence'; userId: string; online: boolean }
   | { t: 'conversation'; conversation: NonNullable<ReturnType<typeof describeConversation>> }
+  /** A conversation that is no longer yours: you left it, or it dissolved. */
+  | { t: 'gone'; conversation: string }
   | { t: 'error'; message: string; retryAfter?: number; code?: 'expired' }
 
 type Socket = WebSocket & {
@@ -115,14 +118,18 @@ class Hub {
   private async reachTheAbsent(message: Message): Promise<void> {
     const sender = findUser(message.senderId)
     if (!sender) return
+    const room = conversationKind(message.conversationId) === 'group'
     for (const userId of participantIds(message.conversationId)) {
       if (userId === message.senderId || this.isOnline(userId)) continue
       if (isBlocked(userId, message.senderId)) continue
+      const said = message.body || (message.attachment ? 'a envoyé un fichier' : '')
       try {
+        // In a group the title is the notification; who spoke goes in the body.
+        const conversation = room ? describeConversation(message.conversationId, userId) : null
         await knock(userId, {
           conversationId: message.conversationId,
-          from: sender.name,
-          body: message.body || (message.attachment ? 'a envoyé un fichier' : ''),
+          from: conversation?.face.name ?? sender.name,
+          body: room ? `${sender.name} : ${said}` : said,
         })
       } catch (error) {
         log.warn('push.knock.failed', { userId, error: String(error) })
@@ -158,18 +165,28 @@ class Hub {
    * someone who asked not to be contacted.
    */
   private announcePresence(userId: string, online: boolean): void {
+    const told = new Set<string>()
     for (const conversation of listConversations(userId)) {
-      const peer = conversation.peer.id
-      if (peer === userId || isBlocked(userId, peer)) continue
-      this.toUser(peer, { t: 'presence', userId, online })
+      for (const member of conversation.members) {
+        if (member.id === userId || told.has(member.id)) continue
+        if (isBlocked(userId, member.id)) continue
+        told.add(member.id)
+        this.toUser(member.id, { t: 'presence', userId, online })
+      }
     }
   }
 
-  /** Presence snapshot for the peers a viewer can see. */
+  /** Presence snapshot for everyone a viewer shares a conversation with. */
   onlinePeers(viewerId: string): string[] {
-    return listConversations(viewerId)
-      .map((c) => c.peer.id)
-      .filter((id) => id !== viewerId && this.isOnline(id) && !isBlocked(viewerId, id))
+    const seen = new Set<string>()
+    for (const conversation of listConversations(viewerId)) {
+      for (const member of conversation.members) {
+        if (member.id === viewerId || !this.isOnline(member.id)) continue
+        if (isBlocked(viewerId, member.id)) continue
+        seen.add(member.id)
+      }
+    }
+    return [...seen]
   }
 }
 

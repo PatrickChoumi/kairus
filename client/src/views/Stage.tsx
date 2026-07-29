@@ -10,7 +10,7 @@ import type { Rect } from '../motion/hooks'
 import { rubberBand, useDrag } from '../motion/gesture'
 import type { Conversation } from '../net/types'
 
-type Morph = { user: Conversation['peer']; from: Rect; to: Rect }
+type Morph = { user: Conversation['face']; from: Rect; to: Rect }
 
 const rectOf = (el: Element | null): Rect | null => {
   if (!el) return null
@@ -101,7 +101,7 @@ export function Stage() {
     if (!from || prefersReducedMotion()) return
     const to = rectOf(headSigil.current)
     if (!to) return
-    beginMorph({ user: conversation.peer, from, to })
+    beginMorph({ user: conversation.face, from, to })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -110,9 +110,9 @@ export function Stage() {
   const close = useCallback(() => {
     const from = rectOf(headSigil.current)
     const to = rectOf(railSigil.current)
-    const peer = conversation?.peer
-    if (from && to && peer && !prefersReducedMotion()) {
-      beginMorph({ user: peer, from, to })
+    const face = conversation?.face
+    if (from && to && face && !prefersReducedMotion()) {
+      beginMorph({ user: face, from, to })
     }
     leave()
   }, [beginMorph, conversation, leave])

@@ -29,13 +29,19 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS conversations (
     id         TEXT PRIMARY KEY,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    -- 'direct' is between two people and cannot gain a third; 'group' can.
+    kind       TEXT NOT NULL DEFAULT 'direct',
+    title      TEXT,
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL
   );
 
   CREATE TABLE IF NOT EXISTS participants (
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     last_read_at    INTEGER NOT NULL DEFAULT 0,
+    -- Someone added today does not get to read last month.
+    joined_at       INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (conversation_id, user_id)
   );
 
@@ -116,6 +122,10 @@ function ensureColumn(table: string, column: string, definition: string): void {
 
 ensureColumn('users', 'token_version', 'INTEGER NOT NULL DEFAULT 0')
 ensureColumn('users', 'recovery_hash', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('conversations', 'kind', "TEXT NOT NULL DEFAULT 'direct'")
+ensureColumn('conversations', 'title', 'TEXT')
+ensureColumn('conversations', 'created_by', 'TEXT')
+ensureColumn('participants', 'joined_at', 'INTEGER NOT NULL DEFAULT 0')
 ensureColumn('messages', 'edited_at', 'INTEGER')
 ensureColumn('messages', 'deleted_at', 'INTEGER')
 

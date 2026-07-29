@@ -23,12 +23,22 @@ export type Message = {
   attachment: Attachment | null
 }
 
+/** What a conversation shows as: a person for a direct one, a name for a group. */
+export type Face = { id: string; name: string; hue: number }
+
 export type Conversation = {
   id: string
-  peer: User
+  kind: 'direct' | 'group'
+  face: Face
+  /** Everyone in it but you. */
+  members: User[]
   lastMessage: Message | null
   unread: number
-  peerReadAt: number
+  /**
+   * When everyone else had read up to. In a group that is the least-read of
+   * them, so a single mark means "all of them", never "one of them".
+   */
+  readAt: number
 }
 
 type UserRow = User & {
@@ -84,10 +94,10 @@ const HANDLE_RE = /^[a-z0-9_]{3,20}$/
 export const isHandle = (v: unknown): v is string =>
   typeof v === 'string' && HANDLE_RE.test(v)
 
-/** Deterministic hue so an identity always wears the same colour. */
-function hueFor(handle: string): number {
+/** Deterministic hue so an identity — or a group — always wears the same colour. */
+function hueFor(seed: string): number {
   let h = 0
-  for (const ch of handle) h = (h * 31 + ch.charCodeAt(0)) % 360
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) % 360
   return h
 }
 
@@ -286,6 +296,9 @@ export function listBlocked(blockerId: string): User[] {
  * prevent a new one from being opened.
  */
 export function blockedInConversation(conversationId: string, userId: string): boolean {
+  // In a group, a block between two members cannot silence the room; the way
+  // out of a group is to leave it.
+  if (conversationKind(conversationId) !== 'direct') return false
   return !!db
     .prepare(
       `SELECT 1 FROM participants p
@@ -339,16 +352,105 @@ export function openConversation(a: string, b: string): string {
   if (existing) return existing.id
 
   const id = randomUUID()
+  const now = Date.now()
   db.transaction(() => {
-    db.prepare(`INSERT INTO conversations (id, created_at) VALUES (?, ?)`).run(id, Date.now())
+    db.prepare(
+      `INSERT INTO conversations (id, created_at, kind, created_by) VALUES (?, ?, 'direct', ?)`,
+    ).run(id, now, a)
     const add = db.prepare(
-      `INSERT INTO participants (conversation_id, user_id) VALUES (?, ?)`,
+      `INSERT INTO participants (conversation_id, user_id, joined_at) VALUES (?, ?, ?)`,
     )
-    add.run(id, a)
-    if (a !== b) add.run(id, b)
+    // Direct conversations have no history to withhold: joined_at stays 0.
+    add.run(id, a, 0)
+    if (a !== b) add.run(id, b, 0)
   })()
   return id
 }
+
+export type GroupRefusal = 'no-title' | 'nobody' | 'blocked'
+
+/** Starts a group. The people you cannot write to are not people you can gather. */
+export function createGroup(
+  creatorId: string,
+  title: string,
+  memberIds: string[],
+): { ok: true; id: string } | { ok: false; reason: GroupRefusal } {
+  const name = title.trim().slice(0, 60)
+  if (!name) return { ok: false, reason: 'no-title' }
+
+  const others = [...new Set(memberIds)].filter((id) => id !== creatorId)
+  if (others.length === 0) return { ok: false, reason: 'nobody' }
+  if (others.some((id) => isBlocked(creatorId, id))) return { ok: false, reason: 'blocked' }
+
+  const id = randomUUID()
+  const now = Date.now()
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO conversations (id, created_at, kind, title, created_by)
+       VALUES (?, ?, 'group', ?, ?)`,
+    ).run(id, now, name, creatorId)
+    const add = db.prepare(
+      `INSERT INTO participants (conversation_id, user_id, joined_at) VALUES (?, ?, ?)`,
+    )
+    // Founders see the group from its beginning, which is now anyway.
+    for (const member of [creatorId, ...others]) add.run(id, member, 0)
+  })()
+  return { ok: true, id }
+}
+
+export const conversationKind = (id: string): 'direct' | 'group' | null =>
+  (db.prepare(`SELECT kind FROM conversations WHERE id = ?`).get(id) as
+    | { kind: 'direct' | 'group' }
+    | undefined)?.kind ?? null
+
+export type MemberRefusal = 'not-a-group' | 'unknown' | 'already' | 'blocked' | 'not-yours'
+
+/** Adds someone, from now on: they do not inherit what was said before. */
+export function addMember(
+  conversationId: string,
+  actorId: string,
+  memberId: string,
+): { ok: true } | { ok: false; reason: MemberRefusal } {
+  if (conversationKind(conversationId) !== 'group') return { ok: false, reason: 'not-a-group' }
+  if (!isParticipant(conversationId, actorId)) return { ok: false, reason: 'not-yours' }
+  if (isParticipant(conversationId, memberId)) return { ok: false, reason: 'already' }
+  if (!findUser(memberId)) return { ok: false, reason: 'unknown' }
+  if (isBlocked(actorId, memberId)) return { ok: false, reason: 'blocked' }
+
+  db.prepare(
+    `INSERT INTO participants (conversation_id, user_id, joined_at) VALUES (?, ?, ?)`,
+  ).run(conversationId, memberId, Date.now())
+  return { ok: true }
+}
+
+/** Leaving, or being removed. The last one out takes the conversation with them. */
+export function removeMember(conversationId: string, memberId: string): boolean {
+  if (conversationKind(conversationId) !== 'group') return false
+  const result = db
+    .prepare(`DELETE FROM participants WHERE conversation_id = ? AND user_id = ?`)
+    .run(conversationId, memberId)
+  if (result.changes === 0) return false
+
+  const left = db
+    .prepare(`SELECT count(*) AS n FROM participants WHERE conversation_id = ?`)
+    .get(conversationId) as { n: number }
+  if (left.n === 0) db.prepare(`DELETE FROM conversations WHERE id = ?`).run(conversationId)
+  return true
+}
+
+export function renameConversation(conversationId: string, title: string): string | null {
+  if (conversationKind(conversationId) !== 'group') return null
+  const name = title.trim().slice(0, 60)
+  if (!name) return null
+  db.prepare(`UPDATE conversations SET title = ? WHERE id = ?`).run(name, conversationId)
+  return name
+}
+
+/** When this person started being able to read the conversation. */
+export const joinedAt = (conversationId: string, userId: string): number =>
+  (db
+    .prepare(`SELECT joined_at AS j FROM participants WHERE conversation_id = ? AND user_id = ?`)
+    .get(conversationId, userId) as { j: number } | undefined)?.j ?? 0
 
 export function participantIds(conversationId: string): string[] {
   return (
@@ -366,50 +468,68 @@ export function isParticipant(conversationId: string, userId: string): boolean {
 
 /** One conversation, shaped from the point of view of `viewerId`. */
 export function describeConversation(id: string, viewerId: string): Conversation | null {
-  const peer = db
+  const row = db.prepare(`SELECT kind, title FROM conversations WHERE id = ?`).get(id) as
+    | { kind: 'direct' | 'group'; title: string | null }
+    | undefined
+  if (!row) return null
+
+  const members = db
     .prepare(
       `SELECT u.id, u.handle, u.name, u.hue
        FROM participants p JOIN users u ON u.id = p.user_id
-       WHERE p.conversation_id = ? AND p.user_id != ?`,
+       WHERE p.conversation_id = ? AND p.user_id != ?
+       ORDER BY u.name COLLATE NOCASE`,
     )
-    .get(id, viewerId) as User | undefined
+    .all(id, viewerId) as User[]
 
-  // A conversation with yourself is legitimate — it is your own notepad.
   const self = findUser(viewerId)
-  const other = peer ?? self
-  if (!other) return null
+  if (!self) return null
+
+  // A conversation with only you in it is legitimate — it is your own notepad.
+  const face: Face =
+    row.kind === 'group'
+      ? { id, name: row.title ?? 'groupe', hue: hueFor(id) }
+      : (members[0] ?? self)
+
+  const mine = db
+    .prepare(
+      `SELECT last_read_at, joined_at FROM participants WHERE conversation_id = ? AND user_id = ?`,
+    )
+    .get(id, viewerId) as { last_read_at: number; joined_at: number } | undefined
+  const since = mine?.joined_at ?? 0
 
   const last = db
     .prepare(
-      `SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1`,
+      `SELECT * FROM messages WHERE conversation_id = ? AND created_at >= ?
+       ORDER BY created_at DESC LIMIT 1`,
     )
-    .get(id) as MessageRow | undefined
+    .get(id, since) as MessageRow | undefined
 
-  const mine = db
-    .prepare(`SELECT last_read_at FROM participants WHERE conversation_id = ? AND user_id = ?`)
-    .get(id, viewerId) as { last_read_at: number } | undefined
-
-  const theirs = peer
-    ? (db
-        .prepare(
-          `SELECT last_read_at FROM participants WHERE conversation_id = ? AND user_id = ?`,
-        )
-        .get(id, peer.id) as { last_read_at: number } | undefined)
-    : mine
+  // One mark for the whole room: the least-read of them, so it never says
+  // "read" while somebody has not.
+  const others = db
+    .prepare(
+      `SELECT min(last_read_at) AS at FROM participants
+       WHERE conversation_id = ? AND user_id != ?`,
+    )
+    .get(id, viewerId) as { at: number | null }
 
   const unread = db
     .prepare(
       `SELECT count(*) AS n FROM messages
-       WHERE conversation_id = ? AND sender_id != ? AND created_at > ? AND deleted_at IS NULL`,
+       WHERE conversation_id = ? AND sender_id != ? AND created_at > ?
+         AND created_at >= ? AND deleted_at IS NULL`,
     )
-    .get(id, viewerId, mine?.last_read_at ?? 0) as { n: number }
+    .get(id, viewerId, mine?.last_read_at ?? 0, since) as { n: number }
 
   return {
     id,
-    peer: other,
+    kind: row.kind,
+    face: { id: face.id, name: face.name, hue: face.hue },
+    members,
     lastMessage: last ? toMessage(last, attachmentOf(last.id)) : null,
     unread: unread.n,
-    peerReadAt: theirs?.last_read_at ?? 0,
+    readAt: others.at ?? mine?.last_read_at ?? 0,
   }
 }
 
@@ -516,14 +636,24 @@ export function retractMessage(id: string, userId: string): Revision {
   return { ok: true, message: { ...existing, body: '', deletedAt, attachment: null } }
 }
 
-export function listMessages(conversationId: string, before?: number, limit = 60): Message[] {
+export function listMessages(
+  conversationId: string,
+  viewerId: string,
+  before?: number,
+  limit = 60,
+): Message[] {
   const rows = db
     .prepare(
       `SELECT * FROM messages
-       WHERE conversation_id = ? AND created_at < ?
+       WHERE conversation_id = ? AND created_at < ? AND created_at >= ?
        ORDER BY created_at DESC LIMIT ?`,
     )
-    .all(conversationId, before ?? Number.MAX_SAFE_INTEGER, limit) as MessageRow[]
+    .all(
+      conversationId,
+      before ?? Number.MAX_SAFE_INTEGER,
+      joinedAt(conversationId, viewerId),
+      limit,
+    ) as MessageRow[]
   return withAttachments(rows.reverse())
 }
 
@@ -536,7 +666,7 @@ export function markRead(conversationId: string, userId: string, at: number): nu
   return stamp
 }
 
-export type SearchHit = { message: Message; conversationId: string; peer: User }
+export type SearchHit = { message: Message; conversationId: string; face: Face }
 
 /**
  * Turns what someone typed into an FTS5 query. Every term is quoted, so
@@ -569,7 +699,7 @@ export function searchMessages(viewerId: string, query: string, limit = 12): Sea
       {
         message: toMessage(row, attachmentOf(row.id)),
         conversationId: row.conversation_id,
-        peer: conversation.peer,
+        face: conversation.face,
       },
     ]
   })
@@ -584,7 +714,7 @@ function searchIndexed(viewerId: string, query: string, limit: number): MessageR
         `SELECT m.* FROM messages_fts f
          JOIN messages m ON m.rowid = f.rowid
          JOIN participants p ON p.conversation_id = m.conversation_id AND p.user_id = ?
-         WHERE messages_fts MATCH ? AND m.deleted_at IS NULL
+         WHERE messages_fts MATCH ? AND m.deleted_at IS NULL AND m.created_at >= p.joined_at
          ORDER BY m.created_at DESC LIMIT ?`,
       )
       .all(viewerId, match, limit) as MessageRow[]
@@ -599,7 +729,7 @@ function searchByScan(viewerId: string, query: string, limit: number): MessageRo
     .prepare(
       `SELECT m.* FROM messages m
        JOIN participants p ON p.conversation_id = m.conversation_id AND p.user_id = ?
-       WHERE m.body LIKE '%' || ? || '%' AND m.deleted_at IS NULL
+       WHERE m.body LIKE '%' || ? || '%' AND m.deleted_at IS NULL AND m.created_at >= p.joined_at
        ORDER BY m.created_at DESC LIMIT ?`,
     )
     .all(viewerId, query, limit) as MessageRow[]

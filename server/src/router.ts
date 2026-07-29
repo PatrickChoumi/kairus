@@ -3,9 +3,12 @@ import { env } from './env.js'
 import { applySecurityHeaders } from './headers.js'
 import { limits } from './limiter.js'
 import {
+  addMember,
   addMessage,
   blockedInConversation,
   blockUser,
+  conversationKind,
+  createGroup,
   createUser,
   describeConversation,
   findLiveIdentity,
@@ -16,11 +19,14 @@ import {
   isHandle,
   isParticipant,
   listBlocked,
+  participantIds,
   listConversations,
   listMessages,
   markRead,
   openConversation,
   publicUser,
+  removeMember,
+  renameConversation,
   replacePassword,
   replaceRecoveryPhrase,
   retractMessage,
@@ -225,7 +231,7 @@ const authed: Record<string, Handler> = {
     if (!isParticipant(id, userId)) throw new HttpError(404, 'cette conversation n’existe pas')
     const beforeRaw = Number(url.searchParams.get('before'))
     const before = Number.isFinite(beforeRaw) && beforeRaw > 0 ? beforeRaw : undefined
-    return { messages: listMessages(id, before) }
+    return { messages: listMessages(id, userId, before) }
   },
 
   'POST /api/messages': ({ userId, body }) => {
@@ -286,6 +292,90 @@ const authed: Record<string, Handler> = {
     spend(limits.look, userId, 'trop de recherches d’un coup')
     const q = (url.searchParams.get('q') ?? '').trim()
     return { hits: q.length >= 2 ? searchMessages(userId, q) : [] }
+  },
+
+  /* -- groups ------------------------------------------------------------- */
+
+  'POST /api/groups': ({ userId, body }) => {
+    spend(limits.open, userId, 'trop de conversations ouvertes d’un coup')
+    const title = field(body, 'title')
+    const handles = Array.isArray((body as { handles?: unknown }).handles)
+      ? ((body as { handles: unknown[] }).handles.filter((h) => typeof h === 'string') as string[])
+      : []
+
+    const members: string[] = []
+    for (const handle of handles.slice(0, 50)) {
+      const person = findUserByHandle(handle.toLowerCase().trim())
+      if (!person) throw new HttpError(404, `personne ne porte le nom @${handle}`)
+      members.push(person.id)
+    }
+
+    const made = createGroup(userId, title, members)
+    if (!made.ok) {
+      const said: Record<string, [number, string]> = {
+        'no-title': [400, 'un groupe a besoin d’un nom'],
+        nobody: [400, 'un groupe a besoin de quelqu’un d’autre'],
+        blocked: [403, 'vous avez bloqué l’une de ces personnes'],
+      }
+      const [status, message] = said[made.reason] ?? [400, 'impossible']
+      throw new HttpError(status, message)
+    }
+
+    announceConversation(made.id, userId)
+    const conversation = describeConversation(made.id, userId)
+    if (!conversation) throw new HttpError(500, 'impossible de créer le groupe')
+    return { conversation }
+  },
+
+  'POST /api/groups/members': ({ userId, body }) => {
+    const conversationId = field(body, 'conversation')
+    const handle = field(body, 'handle').toLowerCase()
+    const person = isHandle(handle) ? findUserByHandle(handle) : undefined
+    if (!person) throw new HttpError(404, 'personne ne porte ce nom')
+
+    const added = addMember(conversationId, userId, person.id)
+    if (!added.ok) {
+      const said: Record<string, [number, string]> = {
+        'not-a-group': [400, 'ce n’est pas un groupe'],
+        'not-yours': [404, 'cette conversation n’existe pas'],
+        already: [409, 'cette personne est déjà là'],
+        unknown: [404, 'personne ne porte ce nom'],
+        blocked: [403, 'vous avez bloqué cette personne'],
+      }
+      const [status, message] = said[added.reason] ?? [400, 'impossible']
+      throw new HttpError(status, message)
+    }
+    announceConversation(conversationId, null)
+    return { member: publicUser(person) }
+  },
+
+  'POST /api/groups/leave': ({ userId, body }) => {
+    const conversationId = field(body, 'conversation')
+    if (!isParticipant(conversationId, userId)) {
+      throw new HttpError(404, 'cette conversation n’existe pas')
+    }
+    if (conversationKind(conversationId) !== 'group') {
+      throw new HttpError(400, 'on ne quitte pas une conversation à deux — on la bloque')
+    }
+    const remaining = participantIds(conversationId).filter((id) => id !== userId)
+    removeMember(conversationId, userId)
+    hub.toUser(userId, { t: 'gone', conversation: conversationId })
+    for (const id of remaining) {
+      const theirs = describeConversation(conversationId, id)
+      if (theirs) hub.toUser(id, { t: 'conversation', conversation: theirs })
+    }
+    return { left: true }
+  },
+
+  'POST /api/groups/rename': ({ userId, body }) => {
+    const conversationId = field(body, 'conversation')
+    if (!isParticipant(conversationId, userId)) {
+      throw new HttpError(404, 'cette conversation n’existe pas')
+    }
+    const title = renameConversation(conversationId, field(body, 'title'))
+    if (!title) throw new HttpError(400, 'un groupe a besoin d’un nom')
+    announceConversation(conversationId, null)
+    return { title }
   },
 
   /* -- reaching you when the tab is closed -------------------------------- */
@@ -514,6 +604,15 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
     ms: Math.round(performance.now() - startedAt),
   })
   return true
+}
+
+/** Tells everyone in a conversation what it looks like from where they stand. */
+function announceConversation(conversationId: string, except: string | null): void {
+  for (const id of participantIds(conversationId)) {
+    if (id === except) continue
+    const theirs = describeConversation(conversationId, id)
+    if (theirs) hub.toUser(id, { t: 'conversation', conversation: theirs })
+  }
 }
 
 /* ------------------------------------------------------------------- files */

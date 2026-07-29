@@ -125,6 +125,30 @@ export const api = {
       body: JSON.stringify({ handle }),
     }),
 
+  createGroup: (title: string, handles: string[]) =>
+    request<{ conversation: Conversation }>('/api/groups', {
+      method: 'POST',
+      body: JSON.stringify({ title, handles }),
+    }),
+
+  addToGroup: (conversation: string, handle: string) =>
+    request<{ member: User }>('/api/groups/members', {
+      method: 'POST',
+      body: JSON.stringify({ conversation, handle }),
+    }),
+
+  leaveGroup: (conversation: string) =>
+    request<{ left: boolean }>('/api/groups/leave', {
+      method: 'POST',
+      body: JSON.stringify({ conversation }),
+    }),
+
+  renameGroup: (conversation: string, title: string) =>
+    request<{ title: string }>('/api/groups/rename', {
+      method: 'POST',
+      body: JSON.stringify({ conversation, title }),
+    }),
+
   openConversation: (handle: string) =>
     request<{ conversation: Conversation }>('/api/conversations', {
       method: 'POST',

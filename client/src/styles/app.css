@@ -421,10 +421,25 @@
 }
 
 .row__name {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* How many people are in a group, stated once and quietly. */
+.row__count {
+  flex: 0 0 auto;
+  font-size: 0.625rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  padding: 1px 5px;
+  border: 1px solid var(--hair);
+  border-radius: 99px;
 }
 
 .row__last {
@@ -795,6 +810,19 @@ html[data-writing] .rail__hint {
 
 .bubble-row__held .bubble-row__undo:hover {
   color: hsl(4 70% 62%);
+}
+
+/* Who is speaking, said only at the top of a run and only in a group. */
+.bubble__author {
+  display: block;
+  margin-block-end: 2px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: hsl(var(--hue, 250) 45% 62%);
+}
+
+.bubble-row[data-mine] .bubble__author {
+  color: color-mix(in oklab, var(--accent-ink) 75%, transparent);
 }
 
 .bubble__body {

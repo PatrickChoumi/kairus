@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 import { SPRING } from '../motion/spring'
 import { useSpringHandle } from '../motion/hooks'
 import { rubberBand, useDrag } from '../motion/gesture'
@@ -15,6 +15,10 @@ type Props = {
   closes: boolean
   quoted: Message | null
   quotedAuthor: string | null
+  /** Set only when it needs saying: the first of a run, in a group. */
+  author: string | null
+  /** The speaker's own colour, so a run is recognisable before it is read. */
+  authorHue: number | null
   read: boolean
   onReply: (message: Message) => void
   onEdit: (message: Message) => void
@@ -36,6 +40,8 @@ export function Bubble({
   closes,
   quoted,
   quotedAuthor,
+  author,
+  authorHue,
   read,
   onReply,
   onEdit,
@@ -102,6 +108,15 @@ export function Bubble({
       </span>
 
       <div className="bubble">
+        {author && (
+          <span
+            className="bubble__author"
+            style={authorHue === null ? undefined : ({ '--hue': authorHue } as CSSProperties)}
+          >
+            {author}
+          </span>
+        )}
+
         {quoted && (
           <button
             className="bubble__quote"
