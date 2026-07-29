@@ -53,6 +53,9 @@ sonde `/api/health`.
    - `TRUST_PROXY` = `1`
 4. **Settings → Volumes → New Volume**, point de montage **`/data`**.
    Sans ça, chaque redéploiement efface tous les comptes et tous les messages.
+   Le `Dockerfile` ne déclare volontairement **pas** d'instruction `VOLUME` :
+   Railway refuse de construire une image qui en contient une, et le montage se
+   fait de toute façon depuis l'extérieur.
 5. **Settings → Networking → Generate Domain** (ou brancher votre domaine).
 6. Redéployer une fois, pour que le volume et les variables soient pris en
    compte.
@@ -118,6 +121,9 @@ fly status
 ```
 
 ### C. N'importe quel hôte Docker (VPS)
+
+Le `Dockerfile` ne déclare pas de `VOLUME` (Railway l'interdit), donc le volume
+se crée et se monte explicitement :
 
 ```bash
 git clone <votre-dépôt> kairus && cd kairus

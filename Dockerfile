@@ -36,9 +36,10 @@ COPY --from=build /app/server/dist server/dist
 COPY --from=build /app/server/package.json server/package.json
 COPY --from=build /app/client/dist client/dist
 
-# Mount a volume here: it holds the SQLite database.
+# The SQLite database lives in /data. There is deliberately no VOLUME
+# instruction: Railway rejects Dockerfiles that declare one, and every host
+# worth using mounts its volume at this path from the outside anyway.
 RUN mkdir -p /data && chown -R node:node /data /app
-VOLUME ["/data"]
 EXPOSE 4000
 
 USER node
