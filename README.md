@@ -147,15 +147,18 @@ En production le serveur sert `client/dist` : une seule origine, donc aucun CORS
 
 ## Déployer
 
-Un conteneur, un service.
+Un conteneur, un service, un volume. **Une seule instance** : le hub WebSocket,
+les compteurs de limitation et la base SQLite vivent dans le processus, donc
+deux répliques cesseraient de se voir.
 
 ```bash
 docker build -t kairus .
-docker run -p 4000:4000 -e JWT_SECRET=... -v kairus-data:/data kairus
+docker run -p 4000:4000 -e JWT_SECRET=... -e TRUST_PROXY=1 -v kairus-data:/data kairus
 ```
 
-`railway.json` pointe sur ce Dockerfile et sur `/api/health`. Montez un volume
-sur `/data` : c'est là que vit la base SQLite.
+**[DEPLOY.md](DEPLOY.md) donne la marche à suivre pas à pas** — Railway, Fly.io
+ou un VPS — avec la configuration du reverse proxy, la liste de vérification
+après mise en ligne, et la bonne façon de sauvegarder une base en mode WAL.
 
 ### Variables d'environnement
 
