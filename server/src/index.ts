@@ -18,13 +18,14 @@ const server = createServer((req, res) => {
   })
 })
 
-attachRealtime(server)
+const closeRealtime = attachRealtime(server, env.trustProxy)
 
 server.listen(env.port, env.host, () => {
   console.log(`[kairus] listening on http://${env.host}:${env.port}`)
 })
 
 const shutdown = () => {
+  closeRealtime()
   server.close(() => process.exit(0))
   setTimeout(() => process.exit(0), 5_000).unref()
 }

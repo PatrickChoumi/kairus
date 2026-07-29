@@ -17,6 +17,8 @@ type State = {
 
   open: string | null
   replyTo: Message | null
+  /** The message being rewritten, if any. Never set at the same time as replyTo. */
+  editing: Message | null
   typing: Record<string, number>
   online: Record<string, boolean>
 
@@ -24,6 +26,8 @@ type State = {
   reading: boolean
   cursor: boolean
   notice: string | null
+  /** Shown once, right after it is minted, and never recoverable afterwards. */
+  keepsake: string | null
 }
 
 type Actions = {
@@ -38,8 +42,17 @@ type Actions = {
 
   say: (body: string) => void
   reply: (message: Message | null) => void
+  edit: (message: Message | null) => void
+  revise: (body: string) => void
+  retract: (message: Message) => void
   breathe: () => void
   older: () => Promise<void>
+
+  recover: (handle: string, phrase: string, password: string) => Promise<void>
+  changePassphrase: (current: string, next: string) => Promise<void>
+  mintRecoveryPhrase: () => Promise<void>
+  revokeEverywhere: () => Promise<void>
+  keep: () => void
 
   setTheme: (theme: Theme) => void
   toggleReading: () => void
@@ -95,6 +108,34 @@ export const useStore = create<State & Actions>((set, get) => {
     if (looking && !mine) markRead(message.conversationId)
   }
 
+  /**
+   * An edit or a retraction. It replaces the message where it stands: it must
+   * not re-sort the rail, and it must not mark anything unread — nothing new
+   * was said.
+   */
+  const absorbRevision = (message: Message) => {
+    const state = get()
+    const list = state.messages[message.conversationId]
+    if (list) {
+      set({
+        messages: {
+          ...state.messages,
+          [message.conversationId]: list.map((m) => (m.id === message.id ? message : m)),
+        },
+      })
+    }
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === message.conversationId && c.lastMessage?.id === message.id
+          ? { ...c, lastMessage: message }
+          : c,
+      ),
+      // Rewriting the message you were about to answer would answer the old one.
+      replyTo: s.replyTo?.id === message.id ? message : s.replyTo,
+      editing: s.editing?.id === message.id && message.deletedAt ? null : s.editing,
+    }))
+  }
+
   const markRead = (conversationId: string) => {
     connection.send({ t: 'read', conversation: conversationId })
     set((s) => ({
@@ -118,6 +159,10 @@ export const useStore = create<State & Actions>((set, get) => {
 
         case 'message':
           absorb(event.message, event.nonce)
+          break
+
+        case 'revised':
+          absorbRevision(event.message)
           break
 
         case 'conversation':
@@ -167,6 +212,8 @@ export const useStore = create<State & Actions>((set, get) => {
 
         case 'error':
           set({ notice: event.message })
+          // A revoked or expired token: there is nothing to reconnect with.
+          if (event.code === 'expired') get().signOut()
           break
       }
     })
@@ -204,12 +251,14 @@ export const useStore = create<State & Actions>((set, get) => {
     exhausted: {},
     open: null,
     replyTo: null,
+    editing: null,
     typing: {},
     online: {},
     theme: storedTheme(),
     reading: false,
     cursor: false,
     notice: null,
+    keepsake: null,
 
     async boot() {
       const token = getToken()
@@ -233,8 +282,43 @@ export const useStore = create<State & Actions>((set, get) => {
     },
 
     async signUp(handle, name, password) {
-      const { token, user } = await api.register(handle.toLowerCase(), name, password)
+      const { token, user, recoveryPhrase } = await api.register(handle.toLowerCase(), name, password)
       land(token, user)
+      // Shown once. There is no email to send it to, so it is this or nothing.
+      set({ keepsake: recoveryPhrase })
+    },
+
+    async recover(handle, phrase, password) {
+      const { token, user, recoveryPhrase } = await api.recover(handle.toLowerCase(), phrase, password)
+      land(token, user)
+      set({ keepsake: recoveryPhrase })
+    },
+
+    async changePassphrase(current, next) {
+      const { token } = await api.changePassphrase(current, next)
+      // Every other session just died, including this one's socket. Reconnect
+      // with the token that replaced it.
+      setToken(token)
+      connection.close()
+      connection.open(token)
+      set({ notice: 'phrase secrète changée — les autres sessions sont fermées' })
+    },
+
+    async mintRecoveryPhrase() {
+      const { recoveryPhrase } = await api.newRecoveryPhrase()
+      set({ keepsake: recoveryPhrase, cursor: false })
+    },
+
+    async revokeEverywhere() {
+      const { token } = await api.revokeSessions()
+      setToken(token)
+      connection.close()
+      connection.open(token)
+      set({ notice: 'toutes les autres sessions sont fermées', cursor: false })
+    },
+
+    keep() {
+      set({ keepsake: null })
     },
 
     signOut() {
@@ -249,21 +333,23 @@ export const useStore = create<State & Actions>((set, get) => {
         exhausted: {},
         open: null,
         replyTo: null,
+        editing: null,
         typing: {},
         online: {},
         cursor: false,
         reading: false,
+        keepsake: null,
       })
     },
 
     enter(conversationId) {
-      set({ open: conversationId, replyTo: null, cursor: false })
+      set({ open: conversationId, replyTo: null, editing: null, cursor: false })
       void hydrate(conversationId)
       markRead(conversationId)
     },
 
     leave() {
-      set({ open: null, replyTo: null, reading: false })
+      set({ open: null, replyTo: null, editing: null, reading: false })
     },
 
     async startWith(handle) {
@@ -295,6 +381,8 @@ export const useStore = create<State & Actions>((set, get) => {
         body: text,
         replyTo: replyTo?.id ?? null,
         createdAt: Date.now(),
+        editedAt: null,
+        deletedAt: null,
         pending: true,
       }
       absorb(optimistic)
@@ -310,7 +398,29 @@ export const useStore = create<State & Actions>((set, get) => {
     },
 
     reply(message) {
-      set({ replyTo: message })
+      set({ replyTo: message, editing: null })
+    },
+
+    edit(message) {
+      if (message && (message.deletedAt || message.senderId !== get().me?.id)) return
+      set({ editing: message, replyTo: null })
+    },
+
+    /** Commits the rewrite, optimistically, then lets the server confirm it. */
+    revise(body) {
+      const { editing } = get()
+      const text = body.trim()
+      if (!editing || !text) return
+      set({ editing: null })
+      if (text === editing.body) return
+      absorbRevision({ ...editing, body: text, editedAt: Date.now() })
+      connection.send({ t: 'revise', message: editing.id, body: text })
+    },
+
+    retract(message) {
+      if (message.senderId !== get().me?.id || message.pending) return
+      absorbRevision({ ...message, body: '', deletedAt: Date.now() })
+      connection.send({ t: 'retract', message: message.id })
     },
 
     /** Signals "someone is writing", at most once per second. */

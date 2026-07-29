@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useStore } from '../state/store'
-import { api } from '../net/api'
+import { api, ApiError } from '../net/api'
 import { Sigil } from '../ui/Sigil'
 import { SPRING } from '../motion/spring'
 import { useSpringTo } from '../motion/hooks'
@@ -15,7 +15,20 @@ type Item = {
   label: string
   hint?: string
   face?: User
+  /** True when choosing it starts a quest, which needs the Cursor to stay open. */
+  keeps?: boolean
   run: () => void
+}
+
+/**
+ * Some commands need more than a name — a passphrase, then its replacement.
+ * Rather than open a settings dialog, the Cursor asks for them one at a time
+ * in the same field it always uses.
+ */
+type Quest = {
+  title: string
+  steps: { label: string; secret?: boolean }[]
+  run: (answers: string[]) => Promise<void>
 }
 
 const fits = (haystack: string, needle: string) =>
@@ -38,11 +51,18 @@ export function Cursor() {
   const openId = useStore((s) => s.open)
   const leave = useStore((s) => s.leave)
   const signOut = useStore((s) => s.signOut)
+  const notify = useStore((s) => s.notify)
+  const changePassphrase = useStore((s) => s.changePassphrase)
+  const mintRecoveryPhrase = useStore((s) => s.mintRecoveryPhrase)
+  const revokeEverywhere = useStore((s) => s.revokeEverywhere)
 
   const [query, setQuery] = useState('')
   const [people, setPeople] = useState<User[]>([])
   const [hits, setHits] = useState<SearchHit[]>([])
   const [aimed, setAimed] = useState(0)
+  const [quest, setQuest] = useState<Quest | null>(null)
+  const [answers, setAnswers] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
 
   const veil = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
@@ -64,12 +84,20 @@ export function Cursor() {
     }
   })
 
+  const dropQuest = () => {
+    setQuest(null)
+    setAnswers([])
+    setQuery('')
+  }
+
   useEffect(() => {
     if (!shown) {
       setQuery('')
       setPeople([])
       setHits([])
       setAimed(0)
+      setQuest(null)
+      setAnswers([])
       return
     }
     const id = requestAnimationFrame(() => field.current?.focus())
@@ -79,7 +107,7 @@ export function Cursor() {
   // Remote lookups are debounced; local matches are instant.
   useEffect(() => {
     const term = query.replace(/^@/, '').trim()
-    if (!shown || term.length < 2) {
+    if (!shown || quest || term.length < 2) {
       setPeople([])
       setHits([])
       return
@@ -95,14 +123,30 @@ export function Cursor() {
       live = false
       window.clearTimeout(timer)
     }
-  }, [query, shown])
+  }, [query, shown, quest])
+
+  const guard = async (work: Promise<unknown>) => {
+    setBusy(true)
+    try {
+      await work
+      setCursor(false)
+    } catch (problem) {
+      notify(problem instanceof ApiError ? problem.message : 'impossible pour l’instant')
+    } finally {
+      setBusy(false)
+      dropQuest()
+    }
+  }
 
   const items = useMemo<Item[]>(() => {
     const term = query.trim()
     const list: Item[] = []
 
     for (const conversation of conversations) {
-      if (term && !fits(conversation.peer.name + ' ' + conversation.peer.handle, term.replace(/^@/, ''))) {
+      if (
+        term &&
+        !fits(conversation.peer.name + ' ' + conversation.peer.handle, term.replace(/^@/, ''))
+      ) {
         continue
       }
       list.push({
@@ -163,6 +207,35 @@ export function Cursor() {
           ]
         : []),
       {
+        key: 'x:passphrase',
+        group: 'réglages',
+        label: 'changer la phrase secrète',
+        hint: 'ferme toutes les autres sessions',
+        keeps: true,
+        run: () =>
+          setQuest({
+            title: 'changer la phrase secrète',
+            steps: [
+              { label: 'phrase secrète actuelle', secret: true },
+              { label: 'nouvelle phrase secrète', secret: true },
+            ],
+            run: ([current, next]) => changePassphrase(current ?? '', next ?? ''),
+          }),
+      },
+      {
+        key: 'x:recovery',
+        group: 'réglages',
+        label: 'nouvelle phrase de secours',
+        hint: 'l’ancienne cesse de fonctionner',
+        run: () => void guard(mintRecoveryPhrase()),
+      },
+      {
+        key: 'x:revoke',
+        group: 'réglages',
+        label: 'fermer les autres sessions',
+        run: () => void guard(revokeEverywhere()),
+      },
+      {
         key: 'x:out',
         group: 'réglages',
         label: 'se déconnecter',
@@ -171,7 +244,9 @@ export function Cursor() {
     ]
 
     for (const command of commands) {
-      if (!term || fits(command.label, term)) list.push(command)
+      if (!term || fits(command.label, term) || (command.hint && fits(command.hint, term))) {
+        list.push(command)
+      }
     }
 
     // A handle typed in full stays openable — but only when it reads as a
@@ -194,6 +269,8 @@ export function Cursor() {
 
     // Groups must stay contiguous, or a heading would be printed twice.
     return list.sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group))
+    // `guard` is stable enough for this list; the actions it closes over are.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     conversations,
     people,
@@ -208,6 +285,9 @@ export function Cursor() {
     toggleReading,
     leave,
     signOut,
+    changePassphrase,
+    mintRecoveryPhrase,
+    revokeEverywhere,
   ])
 
   useEffect(() => setAimed(0), [query])
@@ -217,12 +297,37 @@ export function Cursor() {
   }, [aimed])
 
   const choose = (item: Item | undefined) => {
-    if (!item) return
+    if (!item || busy) return
     item.run()
-    setCursor(false)
+    // A quest keeps the Cursor open: it still has questions to ask.
+    if (!item.keeps) setCursor(false)
+    setQuery('')
+  }
+
+  const advance = () => {
+    if (!quest || busy) return
+    const answer = query
+    if (!answer) return
+    const collected = [...answers, answer]
+    setQuery('')
+    if (collected.length < quest.steps.length) {
+      setAnswers(collected)
+      return
+    }
+    void guard(quest.run(collected))
   }
 
   const onKeyDown = (event: KeyboardEvent) => {
+    if (quest) {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        advance()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        dropQuest()
+      }
+      return
+    }
     if (event.key === 'ArrowDown') {
       event.preventDefault()
       setAimed((i) => Math.min(i + 1, items.length - 1))
@@ -238,6 +343,7 @@ export function Cursor() {
     }
   }
 
+  const step = quest?.steps[answers.length]
   let group = ''
 
   return (
@@ -253,47 +359,63 @@ export function Cursor() {
         style={{ opacity: 0 }}
         onPointerDown={(e) => e.stopPropagation()}
       >
+        {quest && (
+          <div className="cursor__quest">
+            <span className="cursor__quest-title">{quest.title}</span>
+            <span className="cursor__quest-step">
+              {answers.length + 1} / {quest.steps.length}
+            </span>
+          </div>
+        )}
+
         <input
           ref={field}
           className="cursor__field"
+          type={step?.secret ? 'password' : 'text'}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="un nom, un mot, une intention"
-          aria-label="commande"
+          placeholder={step ? step.label : 'un nom, un mot, une intention'}
+          aria-label={step ? step.label : 'commande'}
           autoComplete="off"
           spellCheck={false}
+          disabled={busy}
         />
 
-        <ul className="cursor__list" ref={scroller}>
-          {items.map((item, index) => {
-            const header = item.group !== group ? item.group : null
-            group = item.group
-            return (
-              <li
-                key={item.key}
-                className="cursor__item"
-                data-aimed={index === aimed || undefined}
-                data-group={header ?? undefined}
-                onPointerEnter={() => setAimed(index)}
-                onPointerUp={() => choose(item)}
-              >
-                {header && <span className="cursor__group">{header}</span>}
-                <span className="cursor__row">
-                  {item.face ? (
-                    <Sigil user={item.face} size={26} />
-                  ) : (
-                    <span className="cursor__glyph">›</span>
-                  )}
-                  <span className="cursor__label">{item.label}</span>
-                  {item.hint && <span className="cursor__hint">{item.hint}</span>}
-                </span>
-              </li>
-            )
-          })}
+        {quest ? (
+          <p className="cursor__none">
+            {busy ? 'un instant…' : 'entrée pour continuer · échap pour renoncer'}
+          </p>
+        ) : (
+          <ul className="cursor__list" ref={scroller}>
+            {items.map((item, index) => {
+              const header = item.group !== group ? item.group : null
+              group = item.group
+              return (
+                <li
+                  key={item.key}
+                  className="cursor__item"
+                  data-aimed={index === aimed || undefined}
+                  onPointerEnter={() => setAimed(index)}
+                  onPointerUp={() => choose(item)}
+                >
+                  {header && <span className="cursor__group">{header}</span>}
+                  <span className="cursor__row">
+                    {item.face ? (
+                      <Sigil user={item.face} size={26} />
+                    ) : (
+                      <span className="cursor__glyph">›</span>
+                    )}
+                    <span className="cursor__label">{item.label}</span>
+                    {item.hint && <span className="cursor__hint">{item.hint}</span>}
+                  </span>
+                </li>
+              )
+            })}
 
-          {items.length === 0 && <li className="cursor__none">rien sous ce nom</li>}
-        </ul>
+            {items.length === 0 && <li className="cursor__none">rien sous ce nom</li>}
+          </ul>
+        )}
       </div>
     </div>
   )

@@ -1,13 +1,16 @@
-import type { Server } from 'node:http'
+import type { IncomingMessage, Server } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
+import { limits } from './limiter.js'
 import {
   addMessage,
   describeConversation,
-  findUser,
+  findLiveIdentity,
   isParticipant,
   listConversations,
   markRead,
   participantIds,
+  retractMessage,
+  reviseMessage,
   type Message,
   type User,
 } from './model.js'
@@ -16,15 +19,25 @@ import { verify } from './token.js'
 type Outbound =
   | { t: 'ready'; user: User; conversations: ReturnType<typeof listConversations> }
   | { t: 'message'; message: Message; nonce?: string }
+  | { t: 'revised'; message: Message }
   | { t: 'typing'; conversation: string; userId: string }
   | { t: 'read'; conversation: string; userId: string; at: number }
   | { t: 'presence'; userId: string; online: boolean }
   | { t: 'conversation'; conversation: NonNullable<ReturnType<typeof describeConversation>> }
-  | { t: 'error'; message: string }
+  | { t: 'error'; message: string; retryAfter?: number; code?: 'expired' }
 
-type Socket = WebSocket & { userId?: string; alive?: boolean }
+type Socket = WebSocket & {
+  userId?: string
+  /** The token version this socket authenticated with. */
+  version?: number
+  alive?: boolean
+  address?: string
+}
 
 const HEARTBEAT_MS = 30_000
+const HANDSHAKE_MS = 10_000
+/** Frames a socket may send before it is simply not listened to any more. */
+const FRAMES_PER_MINUTE = 600
 
 class Hub {
   private sockets = new Map<string, Set<Socket>>()
@@ -75,8 +88,26 @@ class Hub {
     this.toConversation(message.conversationId, { t: 'message', message }, skip)
   }
 
+  /** An edit or a retraction: the same message, in its new state. */
+  broadcastRevision(message: Message, skip?: Socket): void {
+    this.toConversation(message.conversationId, { t: 'revised', message }, skip)
+  }
+
   broadcastRead(conversationId: string, userId: string, at: number): void {
     this.toConversation(conversationId, { t: 'read', conversation: conversationId, userId, at })
+  }
+
+  /**
+   * Closes the live sockets a revoked token was still holding open. Without
+   * this, changing a passphrase would end HTTP access while leaving an already
+   * connected socket happily receiving messages.
+   */
+  evict(userId: string, keepVersion: number): void {
+    for (const socket of [...(this.sockets.get(userId) ?? [])]) {
+      if (socket.version === keepVersion) continue
+      send(socket, { t: 'error', message: 'session expirée', code: 'expired' })
+      socket.close(4003, 'revoked')
+    }
   }
 
   /** Everyone sharing a conversation with this person sees them arrive or leave. */
@@ -97,12 +128,28 @@ class Hub {
 
 export const hub = new Hub()
 
-export function attachRealtime(server: Server): void {
-  const wss = new WebSocketServer({ server, path: '/socket' })
+/** Mirrors the HTTP rule: forged forwarding headers must not buy a new budget. */
+function addressOfUpgrade(req: IncomingMessage, trustProxy: number): string {
+  if (trustProxy > 0) {
+    const chain = String(req.headers['x-forwarded-for'] ?? '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+    const hop = chain[chain.length - trustProxy]
+    if (hop) return hop
+  }
+  return req.socket.remoteAddress ?? 'unknown'
+}
 
-  wss.on('connection', (raw) => {
+/** Returns a disposer: closing the HTTP server does not close the socket server. */
+export function attachRealtime(server: Server, trustProxy = 0): () => void {
+  const wss = new WebSocketServer({ server, path: '/socket', maxPayload: 64 * 1024 })
+  const frames = new Map<Socket, { count: number; since: number }>()
+
+  wss.on('connection', (raw, req) => {
     const socket = raw as Socket
     socket.alive = true
+    socket.address = addressOfUpgrade(req, trustProxy)
     socket.on('pong', () => {
       socket.alive = true
     })
@@ -110,9 +157,23 @@ export function attachRealtime(server: Server): void {
     // A socket that never identifies itself is dropped.
     const handshake = setTimeout(() => {
       if (!socket.userId) socket.close(4001, 'no handshake')
-    }, 10_000)
+    }, HANDSHAKE_MS)
 
     socket.on('message', (data) => {
+      // Cheapest possible guard, before parsing anything.
+      const now = Date.now()
+      const seen = frames.get(socket) ?? { count: 0, since: now }
+      if (now - seen.since > 60_000) {
+        seen.count = 0
+        seen.since = now
+      }
+      seen.count += 1
+      frames.set(socket, seen)
+      if (seen.count > FRAMES_PER_MINUTE) {
+        socket.close(4008, 'too many frames')
+        return
+      }
+
       let frame: Record<string, unknown>
       try {
         frame = JSON.parse(String(data))
@@ -125,6 +186,7 @@ export function attachRealtime(server: Server): void {
 
     socket.on('close', () => {
       clearTimeout(handshake)
+      frames.delete(socket)
       hub.detach(socket)
     })
     socket.on('error', () => socket.close())
@@ -141,8 +203,16 @@ export function attachRealtime(server: Server): void {
       socket.ping()
     }
   }, HEARTBEAT_MS)
+  // Waiting to ping is never a reason to keep the process alive.
+  heartbeat.unref?.()
 
   wss.on('close', () => clearInterval(heartbeat))
+
+  return () => {
+    clearInterval(heartbeat)
+    for (const client of wss.clients) client.terminate()
+    wss.close()
+  }
 }
 
 const send = (socket: Socket, payload: Outbound) => {
@@ -154,18 +224,27 @@ const str = (frame: Record<string, unknown>, key: string): string => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+/** Returns false — and tells the client why — when a limit is reached. */
+function afford(socket: Socket, limiter: (typeof limits)['write'], key: string, message: string): boolean {
+  const wait = limiter.take(key)
+  if (wait === 0) return true
+  send(socket, { t: 'error', message, retryAfter: wait })
+  return false
+}
+
 function handleFrame(socket: Socket, frame: Record<string, unknown>): void {
   const type = frame.t
 
   if (type === 'hello') {
-    const userId = verify(str(frame, 'token'))
-    const user = userId ? findUser(userId) : undefined
-    if (!user) {
-      send(socket, { t: 'error', message: 'session expirée' })
+    const claims = verify(str(frame, 'token'))
+    const user = claims ? findLiveIdentity(claims.userId, claims.version) : undefined
+    if (!claims || !user) {
+      send(socket, { t: 'error', message: 'session expirée', code: 'expired' })
       socket.close(4003, 'unauthorised')
       return
     }
     socket.userId = user.id
+    socket.version = claims.version
     hub.attach(socket, user.id)
     send(socket, { t: 'ready', user, conversations: listConversations(user.id) })
     for (const peerId of hub.onlinePeers(user.id)) {
@@ -184,11 +263,35 @@ function handleFrame(socket: Socket, frame: Record<string, unknown>): void {
     case 'send': {
       const body = str(frame, 'body').slice(0, 4000)
       if (!conversation || !body) return
+      if (!afford(socket, limits.write, userId, 'vous écrivez plus vite que nous ne pouvons suivre')) {
+        return
+      }
       const replyTo = str(frame, 'replyTo') || null
       const message = addMessage(conversation, userId, body, replyTo)
       const nonce = str(frame, 'nonce')
       send(socket, { t: 'message', message, ...(nonce ? { nonce } : {}) })
       hub.broadcastMessage(message, socket)
+      break
+    }
+    case 'revise': {
+      const id = str(frame, 'message')
+      const body = str(frame, 'body').slice(0, 4000)
+      if (!id || !body) return
+      if (!afford(socket, limits.write, userId, 'trop de corrections d’un coup')) return
+      const revision = reviseMessage(id, userId, body)
+      if (!revision.ok) return
+      send(socket, { t: 'revised', message: revision.message })
+      hub.broadcastRevision(revision.message, socket)
+      break
+    }
+    case 'retract': {
+      const id = str(frame, 'message')
+      if (!id) return
+      if (!afford(socket, limits.write, userId, 'trop de retraits d’un coup')) return
+      const revision = retractMessage(id, userId)
+      if (!revision.ok) return
+      send(socket, { t: 'revised', message: revision.message })
+      hub.broadcastRevision(revision.message, socket)
       break
     }
     case 'typing': {

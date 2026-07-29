@@ -11,7 +11,16 @@ export const socketUrl = (): string => {
   return `${protocol}//${location.host}/socket`
 }
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status = 0,
+    /** Seconds to wait, when the server asked us to slow down. */
+    readonly retryAfter?: number,
+  ) {
+    super(message)
+  }
+}
 
 let token: string | null = localStorage.getItem('kairus.token')
 
@@ -37,8 +46,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
   if (!response.ok) {
-    const message = typeof payload.error === 'string' ? payload.error : 'quelque chose n’a pas fonctionné'
-    throw new ApiError(message)
+    const message =
+      typeof payload.error === 'string' ? payload.error : 'quelque chose n’a pas fonctionné'
+    const retryAfter = typeof payload.retryAfter === 'number' ? payload.retryAfter : undefined
+    throw new ApiError(message, response.status, retryAfter)
   }
   return payload as T
 }
@@ -54,7 +65,7 @@ const query = (params: Record<string, string | number | undefined>) => {
 
 export const api = {
   register: (handle: string, name: string, password: string) =>
-    request<{ token: string; user: User }>('/api/auth/register', {
+    request<{ token: string; user: User; recoveryPhrase: string }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ handle, name, password }),
     }),
@@ -64,6 +75,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ handle, password }),
     }),
+
+  /** The way back in when the passphrase is gone. */
+  recover: (handle: string, phrase: string, password: string) =>
+    request<{ token: string; user: User; recoveryPhrase: string }>('/api/auth/recover', {
+      method: 'POST',
+      body: JSON.stringify({ handle, phrase, password }),
+    }),
+
+  changePassphrase: (current: string, next: string) =>
+    request<{ token: string }>('/api/account/passphrase', {
+      method: 'POST',
+      body: JSON.stringify({ current, next }),
+    }),
+
+  newRecoveryPhrase: () =>
+    request<{ recoveryPhrase: string }>('/api/account/recovery', { method: 'POST' }),
+
+  revokeSessions: () => request<{ token: string }>('/api/account/revoke', { method: 'POST' }),
 
   me: () => request<{ user: User }>('/api/me'),
 

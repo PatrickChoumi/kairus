@@ -16,13 +16,16 @@ type Props = {
   quotedAuthor: string | null
   read: boolean
   onReply: (message: Message) => void
+  onEdit: (message: Message) => void
+  onRetract: (message: Message) => void
 }
 
 const REPLY_AT = 56
 
 /**
- * One utterance. Pulling it sideways answers it; there is no button for that,
- * and none is needed once you have done it once.
+ * One utterance. Pulling it sideways answers it; holding it opens the few
+ * things you can do to it. There are no buttons at rest, and none are needed
+ * once you have done either once.
  */
 export function Bubble({
   message,
@@ -33,10 +36,13 @@ export function Bubble({
   quotedAuthor,
   read,
   onReply,
+  onEdit,
+  onRetract,
 }: Props) {
   const row = useRef<HTMLDivElement>(null)
   const [held, setHeld] = useState(false)
   const armed = useRef(false)
+  const gone = Boolean(message.deletedAt)
 
   const offset = useSpringHandle(0, SPRING.snap, (value) => {
     const el = row.current
@@ -48,11 +54,11 @@ export function Bubble({
   const drag = useDrag({
     axis: 'x',
     onMove(delta) {
+      if (gone) return
       // Pulling towards the centre of the screen is the answering direction.
       const along = mine ? Math.min(delta, 0) : Math.max(delta, 0)
       const magnitude = rubberBand(Math.abs(along), REPLY_AT)
-      const next = mine ? -magnitude : magnitude
-      offset.set(next)
+      offset.set(mine ? -magnitude : magnitude)
       if (!armed.current && Math.abs(along) >= REPLY_AT) {
         armed.current = true
         navigator.vibrate?.(8)
@@ -67,6 +73,11 @@ export function Bubble({
     },
   })
 
+  const hold = (event: { preventDefault: () => void }) => {
+    event.preventDefault()
+    if (!gone) setHeld((h) => !h)
+  }
+
   return (
     <div
       className="bubble-row"
@@ -74,13 +85,12 @@ export function Bubble({
       data-opens={opens || undefined}
       data-closes={closes || undefined}
       data-pending={message.pending || undefined}
+      data-gone={gone || undefined}
+      data-held={held || undefined}
       ref={row}
       {...drag}
-      onDoubleClick={() => onReply(message)}
-      onContextMenu={(e) => {
-        e.preventDefault()
-        setHeld((h) => !h)
-      }}
+      onDoubleClick={() => !gone && onReply(message)}
+      onContextMenu={hold}
     >
       <span className="bubble-row__cue" aria-hidden="true">
         ↩
@@ -98,23 +108,74 @@ export function Bubble({
             }}
           >
             <span className="bubble__quote-who">{quotedAuthor}</span>
-            <span className="bubble__quote-body">{quoted.body}</span>
+            <span className="bubble__quote-body">
+              {quoted.deletedAt ? 'message retiré' : quoted.body}
+            </span>
           </button>
         )}
 
-        <p className="bubble__body" id={`m-${message.id}`}>
-          {message.body}
-        </p>
+        {gone ? (
+          <p className="bubble__gone" id={`m-${message.id}`}>
+            message retiré
+          </p>
+        ) : (
+          <p className="bubble__body" id={`m-${message.id}`}>
+            {message.body}
+          </p>
+        )}
 
         <span className="bubble__meta">
-          <time dateTime={new Date(message.createdAt).toISOString()} title={exact(message.createdAt)}>
+          {message.editedAt && <span className="bubble__edited">modifié</span>}
+          <time
+            dateTime={new Date(message.createdAt).toISOString()}
+            title={exact(message.createdAt)}
+          >
             {clock(message.createdAt)}
           </time>
-          {mine && <span className="bubble__seen" data-read={read || undefined} aria-label={read ? 'lu' : 'envoyé'} />}
+          {mine && !gone && (
+            <span
+              className="bubble__seen"
+              data-read={read || undefined}
+              aria-label={read ? 'lu' : 'envoyé'}
+            />
+          )}
         </span>
       </div>
 
-      {held && <span className="bubble-row__exact">{exact(message.createdAt)}</span>}
+      {held && (
+        <div className="bubble-row__held">
+          <span className="bubble-row__exact">{exact(message.createdAt)}</span>
+          <button
+            onClick={() => {
+              setHeld(false)
+              onReply(message)
+            }}
+          >
+            répondre
+          </button>
+          {mine && !message.pending && (
+            <>
+              <button
+                onClick={() => {
+                  setHeld(false)
+                  onEdit(message)
+                }}
+              >
+                modifier
+              </button>
+              <button
+                className="bubble-row__undo"
+                onClick={() => {
+                  setHeld(false)
+                  onRetract(message)
+                }}
+              >
+                retirer
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -7,9 +7,12 @@ const MAX_HEIGHT = 168
 
 export function Composer({ peerName }: { peerName: string }) {
   const say = useStore((s) => s.say)
+  const revise = useStore((s) => s.revise)
   const breathe = useStore((s) => s.breathe)
   const replyTo = useStore((s) => s.replyTo)
   const setReply = useStore((s) => s.reply)
+  const editing = useStore((s) => s.editing)
+  const setEdit = useStore((s) => s.edit)
   const open = useStore((s) => s.open)
   const me = useStore((s) => s.me)
   const messages = useThread(open)
@@ -48,9 +51,27 @@ export function Composer({ peerName }: { peerName: string }) {
     if (replyTo) area.current?.focus()
   }, [replyTo])
 
+  // Rewriting starts from what you actually wrote.
+  useEffect(() => {
+    if (!editing) return
+    setDraft(editing.body)
+    area.current?.focus()
+    requestAnimationFrame(() => {
+      const el = area.current
+      el?.setSelectionRange(el.value.length, el.value.length)
+    })
+  }, [editing])
+
   const dispatch = () => {
     if (!ready) return
-    say(draft)
+    if (editing) revise(draft)
+    else say(draft)
+    setDraft('')
+    requestAnimationFrame(resize)
+  }
+
+  const abandon = () => {
+    setEdit(null)
     setDraft('')
     requestAnimationFrame(resize)
   }
@@ -61,31 +82,40 @@ export function Composer({ peerName }: { peerName: string }) {
       dispatch()
       return
     }
-    if (event.key === 'Escape' && replyTo) {
-      event.preventDefault()
-      setReply(null)
+    if (event.key === 'Escape') {
+      if (editing) {
+        event.preventDefault()
+        abandon()
+      } else if (replyTo) {
+        event.preventDefault()
+        setReply(null)
+      }
       return
     }
-    // An empty composer plus ArrowUp answers the last thing said to you.
-    if (event.key === 'ArrowUp' && draft === '') {
-      const target = [...messages].reverse().find((m) => m.senderId !== me?.id)
+    // An empty composer plus ArrowUp reopens the last thing you said.
+    if (event.key === 'ArrowUp' && draft === '' && !editing) {
+      const target = [...messages]
+        .reverse()
+        .find((m) => m.senderId === me?.id && !m.pending && !m.deletedAt)
       if (target) {
         event.preventDefault()
-        setReply(target)
+        setEdit(target)
       }
     }
   }
 
   return (
-    <div className="composer">
-      {replyTo && (
+    <div className="composer" data-editing={editing ? true : undefined}>
+      {(replyTo || editing) && (
         <div className="composer__reply">
-          <span className="composer__reply-mark">↩</span>
-          <span className="composer__reply-body">{replyTo.body}</span>
+          <span className="composer__reply-mark">{editing ? '✎' : '↩'}</span>
+          <span className="composer__reply-body">
+            {editing ? 'vous modifiez ce message' : replyTo?.body}
+          </span>
           <button
             className="composer__reply-drop"
-            onClick={() => setReply(null)}
-            aria-label="annuler la réponse"
+            onClick={() => (editing ? abandon() : setReply(null))}
+            aria-label={editing ? 'annuler la modification' : 'annuler la réponse'}
           >
             ×
           </button>
@@ -98,10 +128,10 @@ export function Composer({ peerName }: { peerName: string }) {
           className="composer__input"
           rows={1}
           value={draft}
-          placeholder={`écrire à ${peerName}`}
+          placeholder={editing ? 'réécrire' : `écrire à ${peerName}`}
           onChange={(e) => {
             setDraft(e.target.value)
-            breathe()
+            if (!editing) breathe()
           }}
           onKeyDown={onKeyDown}
           onFocus={() => {
@@ -116,17 +146,28 @@ export function Composer({ peerName }: { peerName: string }) {
           className="composer__send"
           onClick={dispatch}
           tabIndex={ready ? 0 : -1}
-          aria-label="envoyer"
+          aria-label={editing ? 'enregistrer' : 'envoyer'}
         >
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path
-              d="M5 12h13M12 5.5 18.5 12 12 18.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            {editing ? (
+              <path
+                d="M5 12.5 10 17.5 19 7"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ) : (
+              <path
+                d="M5 12h13M12 5.5 18.5 12 12 18.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
           </svg>
         </button>
       </div>

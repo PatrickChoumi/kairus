@@ -208,15 +208,121 @@
   color: hsl(4 70% 66%);
 }
 
-.threshold__swap {
+.threshold__ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
   margin-block-start: 4px;
+}
+
+.threshold__ways button {
   font-size: var(--text-meta);
   color: var(--ink-faint);
   transition: color 0.2s ease;
 }
 
-.threshold__swap:hover {
+.threshold__ways button:hover {
   color: var(--ink-soft);
+}
+
+/* ---------------------------------------------------------------- keepsake */
+
+.keepsake {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--gutter);
+}
+
+.keepsake__panel {
+  inline-size: min(100%, 26rem);
+}
+
+.keepsake__title {
+  font-size: 1.125rem;
+  font-weight: 500;
+  margin-block-end: 8px;
+}
+
+.keepsake__line {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  margin-block-end: 26px;
+}
+
+.keepsake__phrase {
+  padding: 18px 16px;
+  border: 1px solid var(--hair-strong);
+  border-radius: var(--radius-field);
+  background: var(--veil);
+  font-family: var(--font-mono);
+  font-size: 1.0625rem;
+  letter-spacing: 0.06em;
+  text-align: center;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.keepsake__acts {
+  display: flex;
+  justify-content: center;
+  margin-block: 12px 26px;
+}
+
+.keepsake__copy {
+  padding: 6px 14px;
+  border: 1px solid var(--hair-strong);
+  border-radius: 99px;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.keepsake__copy:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.keepsake__vow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.keepsake__vow input {
+  inline-size: 16px;
+  block-size: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.keepsake__go {
+  inline-size: 100%;
+  margin-block-start: 22px;
+  padding-block: 12px;
+  border-radius: var(--radius-field);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 500;
+  transition:
+    opacity 0.2s ease,
+    filter 0.2s ease;
+}
+
+.keepsake__go:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.keepsake__go:not(:disabled):hover {
+  filter: brightness(1.08);
 }
 
 /* ------------------------------------------------------------------- rail */
@@ -581,10 +687,6 @@ html[data-writing] .rail__hint {
 }
 
 .bubble-row__exact {
-  position: absolute;
-  inset-block-end: -14px;
-  inset-inline-start: var(--gutter);
-  font-size: 0.625rem;
   color: var(--ink-faint);
 }
 
@@ -627,6 +729,66 @@ html[data-writing] .rail__hint {
 
 .bubble-row[data-pending] .bubble {
   opacity: 0.55;
+}
+
+/* A retracted message keeps its place without keeping its weight. */
+.bubble-row[data-gone] .bubble {
+  background: none;
+  border: 1px dashed var(--hair-strong);
+  color: var(--ink-faint);
+  box-shadow: none;
+}
+
+.bubble__gone {
+  font-style: italic;
+  font-size: 0.8125rem;
+}
+
+.bubble__edited {
+  font-style: italic;
+}
+
+.bubble-row[data-held] .bubble {
+  outline: 1px solid var(--hair-strong);
+  outline-offset: 2px;
+}
+
+.bubble-row__held {
+  position: absolute;
+  inset-block-start: calc(100% - 2px);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--hair-strong);
+  border-radius: 12px;
+  background: var(--veil);
+  box-shadow: var(--shadow-lift);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  animation: settle 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.bubble-row:not([data-mine]) .bubble-row__held {
+  inset-inline-start: var(--gutter);
+}
+
+.bubble-row[data-mine] .bubble-row__held {
+  inset-inline-end: var(--gutter);
+}
+
+.bubble-row__held button {
+  color: var(--ink-soft);
+  transition: color 0.15s ease;
+}
+
+.bubble-row__held button:hover {
+  color: var(--ink);
+}
+
+.bubble-row__held .bubble-row__undo:hover {
+  color: hsl(4 70% 62%);
 }
 
 .bubble__body {
@@ -756,6 +918,10 @@ html[data-writing] .rail__hint {
   color: var(--accent);
 }
 
+.composer[data-editing] .composer__line {
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+
 .composer__reply-body {
   flex: 1;
   min-inline-size: 0;
@@ -873,6 +1039,22 @@ html[data-writing] .rail__hint {
   will-change: transform, opacity;
 }
 
+.cursor__quest {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px 0;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.cursor__quest-step {
+  font-variant-numeric: tabular-nums;
+}
+
 .cursor__field {
   padding: 17px 20px;
   font-size: 1rem;
@@ -882,6 +1064,10 @@ html[data-writing] .rail__hint {
 
 .cursor__field::placeholder {
   color: var(--ink-faint);
+}
+
+.cursor__field:disabled {
+  opacity: 0.5;
 }
 
 .cursor__list {

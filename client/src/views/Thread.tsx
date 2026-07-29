@@ -23,6 +23,8 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   const reading = useStore((s) => s.reading)
   const older = useStore((s) => s.older)
   const setReply = useStore((s) => s.reply)
+  const setEdit = useStore((s) => s.edit)
+  const retract = useStore((s) => s.retract)
 
   const stream = useRef<HTMLDivElement>(null)
   const wasNearBottom = useRef(true)
@@ -74,7 +76,9 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   if (!me) return null
 
   const byId = new Map(messages.map((m) => [m.id, m]))
-  const lastMine = [...messages].reverse().find((m) => m.senderId === me.id && !m.pending)
+  const lastMine = [...messages]
+    .reverse()
+    .find((m) => m.senderId === me.id && !m.pending && !m.deletedAt)
 
   return (
     <div className="thread" data-reading={reading || undefined}>
@@ -147,6 +151,8 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
                     conversation.peerReadAt >= message.createdAt
                   }
                   onReply={setReply}
+                  onEdit={setEdit}
+                  onRetract={retract}
                 />
               </div>
             )

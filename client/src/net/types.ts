@@ -12,9 +12,12 @@ export type Message = {
   body: string
   replyTo: string | null
   createdAt: number
+  /** When the sender rewrote it. */
+  editedAt: number | null
+  /** When the sender took it back — the body is empty from then on. */
+  deletedAt: number | null
   /** Set while a message is still in flight, cleared when the server confirms. */
   pending?: boolean
-  failed?: boolean
 }
 
 export type Conversation = {
@@ -34,8 +37,10 @@ export type SearchHit = {
 export type Inbound =
   | { t: 'ready'; user: User; conversations: Conversation[] }
   | { t: 'message'; message: Message; nonce?: string }
+  /** The same message in a new state: rewritten, or taken back. */
+  | { t: 'revised'; message: Message }
   | { t: 'typing'; conversation: string; userId: string }
   | { t: 'read'; conversation: string; userId: string; at: number }
   | { t: 'presence'; userId: string; online: boolean }
   | { t: 'conversation'; conversation: Conversation }
-  | { t: 'error'; message: string }
+  | { t: 'error'; message: string; retryAfter?: number; code?: 'expired' }

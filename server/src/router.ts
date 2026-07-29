@@ -1,20 +1,31 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { env } from './env.js'
+import { limits } from './limiter.js'
 import {
   addMessage,
   createUser,
   describeConversation,
-  findUser,
+  findLiveIdentity,
   findUserByHandle,
+  findUserRow,
   isHandle,
   isParticipant,
   listConversations,
   listMessages,
   markRead,
   openConversation,
+  publicUser,
+  replacePassword,
+  replaceRecoveryPhrase,
+  retractMessage,
+  reviseMessage,
+  revokeSessions,
   searchMessages,
   searchUsers,
+  tokenVersionOf,
   verifyPassword,
+  verifyRecoveryPhrase,
+  type Revision,
 } from './model.js'
 import { sign, verify } from './token.js'
 import { hub } from './realtime.js'
@@ -23,6 +34,8 @@ export class HttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Seconds to wait, for the 429 case. */
+    readonly retryAfter?: number,
   ) {
     super(message)
   }
@@ -32,6 +45,8 @@ type Ctx = {
   url: URL
   body: unknown
   userId: string
+  /** Who is calling, for the limits that key on the caller rather than the account. */
+  address: string
 }
 
 const json = (res: ServerResponse, status: number, payload: unknown) => {
@@ -43,17 +58,59 @@ const json = (res: ServerResponse, status: number, payload: unknown) => {
   res.end(data)
 }
 
-export function applyCors(req: IncomingMessage, res: ServerResponse): void {
-  const origin = req.headers.origin
-  if (!origin) return
-  if (env.origins.length === 0 || env.origins.includes(origin)) {
-    res.setHeader('access-control-allow-origin', origin)
-    res.setHeader('vary', 'origin')
-    res.setHeader('access-control-allow-headers', 'content-type, authorization')
-    res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS')
-    res.setHeader('access-control-max-age', '86400')
+/* -------------------------------------------------------------------- cors */
+
+const sameOrigin = (req: IncomingMessage, origin: string): boolean => {
+  try {
+    return new URL(origin).host === req.headers.host
+  } catch {
+    return false
   }
 }
+
+/**
+ * With no allow-list configured, only the origin serving the app is accepted.
+ * Reflecting whatever arrives would be a quietly permissive default, and the
+ * single-container deployment never needs it.
+ */
+function applyCors(req: IncomingMessage, res: ServerResponse): void {
+  const origin = req.headers.origin
+  if (!origin) return
+  const allowed = env.origins.length > 0 ? env.origins.includes(origin) : sameOrigin(req, origin)
+  if (!allowed) return
+  res.setHeader('access-control-allow-origin', origin)
+  res.setHeader('vary', 'origin')
+  res.setHeader('access-control-allow-headers', 'content-type, authorization')
+  res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS')
+  res.setHeader('access-control-max-age', '86400')
+}
+
+/* ---------------------------------------------------------------- callers */
+
+/**
+ * The caller's address. `X-Forwarded-For` is only consulted when TRUST_PROXY
+ * says how many proxies are in front of us — otherwise anyone could forge a
+ * header and get a fresh rate-limit budget on every request.
+ */
+export function addressOf(req: IncomingMessage): string {
+  if (env.trustProxy > 0) {
+    const chain = String(req.headers['x-forwarded-for'] ?? '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+    // Our proxy appended the last entry, the one before it appended the previous.
+    const hop = chain[chain.length - env.trustProxy]
+    if (hop) return hop
+  }
+  return req.socket.remoteAddress ?? 'unknown'
+}
+
+const spend = (limiter: { take(key: string, cost?: number): number }, key: string, message: string) => {
+  const wait = limiter.take(key)
+  if (wait > 0) throw new HttpError(429, message, wait)
+}
+
+/* ----------------------------------------------------------------- bodies */
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
@@ -76,16 +133,38 @@ const field = (body: unknown, key: string): string => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+const PASSPHRASE_MIN = 8
+const requirePassphrase = (value: string): string => {
+  if (value.length < PASSPHRASE_MIN) {
+    throw new HttpError(400, 'une phrase secrète fait au moins 8 caractères')
+  }
+  return value
+}
+
+const refusals: Record<string, [number, string]> = {
+  missing: [404, 'ce message n’existe plus'],
+  'not-yours': [403, 'ce message n’est pas le vôtre'],
+  retracted: [409, 'ce message a été retiré'],
+  empty: [400, 'un message ne peut pas être vide'],
+}
+
+const unwrap = (revision: Revision) => {
+  if (revision.ok) return revision.message
+  const [status, message] = refusals[revision.reason] ?? [400, 'impossible']
+  throw new HttpError(status, message)
+}
+
 /* ------------------------------------------------------------------ routes */
 
 type Handler = (ctx: Ctx) => unknown | Promise<unknown>
 
 const authed: Record<string, Handler> = {
-  'GET /api/me': ({ userId }) => ({ user: findUser(userId) }),
+  'GET /api/me': ({ userId }) => ({ user: findLiveIdentity(userId, tokenVersionOf(userId)) }),
 
   'GET /api/conversations': ({ userId }) => ({ conversations: listConversations(userId) }),
 
   'POST /api/conversations': ({ userId, body }) => {
+    spend(limits.open, userId, 'trop de conversations ouvertes d’un coup')
     const handle = field(body, 'handle').toLowerCase()
     if (!isHandle(handle)) throw new HttpError(400, 'ce nom d’usage n’est pas valide')
     const peer = findUserByHandle(handle)
@@ -114,9 +193,12 @@ const authed: Record<string, Handler> = {
   },
 
   'POST /api/messages': ({ userId, body }) => {
+    spend(limits.write, userId, 'vous écrivez plus vite que nous ne pouvons suivre')
     const conversationId = field(body, 'conversation')
     const text = field(body, 'body')
-    if (!isParticipant(conversationId, userId)) throw new HttpError(404, 'cette conversation n’existe pas')
+    if (!isParticipant(conversationId, userId)) {
+      throw new HttpError(404, 'cette conversation n’existe pas')
+    }
     if (!text) throw new HttpError(400, 'message vide')
     const replyTo = field(body, 'replyTo') || null
     const message = addMessage(conversationId, userId, text.slice(0, 4000), replyTo)
@@ -124,50 +206,117 @@ const authed: Record<string, Handler> = {
     return { message }
   },
 
+  'POST /api/messages/revise': ({ userId, body }) => {
+    spend(limits.write, userId, 'trop de corrections d’un coup')
+    const message = unwrap(
+      reviseMessage(field(body, 'message'), userId, field(body, 'body').slice(0, 4000)),
+    )
+    hub.broadcastRevision(message)
+    return { message }
+  },
+
+  'POST /api/messages/retract': ({ userId, body }) => {
+    spend(limits.write, userId, 'trop de retraits d’un coup')
+    const message = unwrap(retractMessage(field(body, 'message'), userId))
+    hub.broadcastRevision(message)
+    return { message }
+  },
+
   'POST /api/read': ({ userId, body }) => {
     const conversationId = field(body, 'conversation')
-    if (!isParticipant(conversationId, userId)) throw new HttpError(404, 'cette conversation n’existe pas')
+    if (!isParticipant(conversationId, userId)) {
+      throw new HttpError(404, 'cette conversation n’existe pas')
+    }
     const at = markRead(conversationId, userId, Date.now())
     hub.broadcastRead(conversationId, userId, at)
     return { at }
   },
 
   'GET /api/people': ({ userId, url }) => {
+    spend(limits.look, userId, 'trop de recherches d’un coup')
     const q = (url.searchParams.get('q') ?? '').trim()
     return { people: q ? searchUsers(q, userId) : [] }
   },
 
   'GET /api/search': ({ userId, url }) => {
+    spend(limits.look, userId, 'trop de recherches d’un coup')
     const q = (url.searchParams.get('q') ?? '').trim()
     return { hits: q.length >= 2 ? searchMessages(userId, q) : [] }
+  },
+
+  /* -- the account itself ------------------------------------------------ */
+
+  'POST /api/account/passphrase': async ({ userId, body }) => {
+    const row = findUserRow(userId)
+    if (!row || !(await verifyPassword(row, field(body, 'current')))) {
+      throw new HttpError(401, 'phrase secrète actuelle incorrecte')
+    }
+    const version = await replacePassword(userId, requirePassphrase(field(body, 'next')))
+    // Every other session is now invalid, including this user's other devices.
+    hub.evict(userId, version)
+    return { token: sign(userId, version) }
+  },
+
+  'POST /api/account/recovery': async ({ userId }) => ({
+    recoveryPhrase: await replaceRecoveryPhrase(userId),
+  }),
+
+  'POST /api/account/revoke': ({ userId }) => {
+    const version = revokeSessions(userId)
+    hub.evict(userId, version)
+    return { token: sign(userId, version) }
   },
 }
 
 const anonymous: Record<string, Handler> = {
-  'POST /api/auth/register': ({ body }) => {
+  'POST /api/auth/register': async ({ body, address }) => {
+    spend(limits.signUp, address, 'trop de comptes créés depuis cet endroit')
     const handle = field(body, 'handle').toLowerCase()
-    const password = field(body, 'password')
     const name = field(body, 'name')
     if (!isHandle(handle)) {
       throw new HttpError(400, 'un nom d’usage fait 3 à 20 caractères : a–z, 0–9, _')
     }
-    if (password.length < 8) throw new HttpError(400, 'une phrase secrète fait au moins 8 caractères')
+    requirePassphrase(field(body, 'password'))
     if (findUserByHandle(handle)) throw new HttpError(409, 'ce nom est déjà pris')
-    const user = createUser(handle, name, password)
-    return { token: sign(user.id), user }
+    const { user, recoveryPhrase } = await createUser(handle, name, field(body, 'password'))
+    return { token: sign(user.id, 0), user, recoveryPhrase }
   },
 
-  'POST /api/auth/login': ({ body }) => {
+  'POST /api/auth/login': async ({ body, address }) => {
     const handle = field(body, 'handle').toLowerCase()
-    const password = field(body, 'password')
+    // Two limits: one on the machine trying, one on the account being tried.
+    // The second is what a rotating pool of addresses cannot walk around.
+    spend(limits.signInFromAddress, address, 'trop de tentatives depuis cet endroit')
+    if (handle) spend(limits.signInToHandle, handle, 'trop de tentatives sur ce nom')
+
     const row = findUserByHandle(handle)
-    if (!row || !verifyPassword(row, password)) {
+    if (!row || !(await verifyPassword(row, field(body, 'password')))) {
       throw new HttpError(401, 'nom ou phrase secrète incorrecte')
     }
-    return {
-      token: sign(row.id),
-      user: { id: row.id, handle: row.handle, name: row.name, hue: row.hue },
+    // A genuine sign-in clears the suspicion it was accumulating.
+    limits.signInFromAddress.clear(address)
+    limits.signInToHandle.clear(handle)
+
+    return { token: sign(row.id, row.token_version), user: publicUser(row) }
+  },
+
+  'POST /api/auth/recover': async ({ body, address }) => {
+    const handle = field(body, 'handle').toLowerCase()
+    spend(limits.recover, address, 'trop de tentatives de récupération')
+    if (handle) spend(limits.recover, handle, 'trop de tentatives sur ce nom')
+
+    const row = findUserByHandle(handle)
+    if (!row || !(await verifyRecoveryPhrase(row, field(body, 'phrase')))) {
+      throw new HttpError(401, 'nom ou phrase de secours incorrecte')
     }
+    const version = await replacePassword(row.id, requirePassphrase(field(body, 'password')))
+    // The phrase that was just used is spent; a new one takes its place.
+    const recoveryPhrase = await replaceRecoveryPhrase(row.id)
+    hub.evict(row.id, version)
+    limits.recover.clear(address)
+    limits.recover.clear(handle)
+
+    return { token: sign(row.id, version), user: publicUser(row), recoveryPhrase }
   },
 
   'GET /api/health': () => ({ ok: true }),
@@ -184,24 +333,30 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
     return true
   }
 
+  const address = addressOf(req)
   const key = `${req.method} ${url.pathname}`
+
   try {
+    spend(limits.anything, address, 'trop de requêtes')
+
     const open = anonymous[key]
     if (open) {
-      json(res, 200, await open({ url, body: await readBody(req), userId: '' }))
+      json(res, 200, await open({ url, body: await readBody(req), userId: '', address }))
       return true
     }
 
     const guarded = authed[key]
     if (!guarded) throw new HttpError(404, 'route inconnue')
 
-    const userId = verify(req.headers.authorization?.replace(/^Bearer /i, ''))
-    if (!userId || !findUser(userId)) throw new HttpError(401, 'session expirée')
+    const claims = verify(req.headers.authorization?.replace(/^Bearer /i, ''))
+    const user = claims ? findLiveIdentity(claims.userId, claims.version) : undefined
+    if (!user) throw new HttpError(401, 'session expirée')
 
-    json(res, 200, await guarded({ url, body: await readBody(req), userId }))
+    json(res, 200, await guarded({ url, body: await readBody(req), userId: user.id, address }))
   } catch (error) {
     if (error instanceof HttpError) {
-      json(res, error.status, { error: error.message })
+      if (error.retryAfter) res.setHeader('retry-after', String(error.retryAfter))
+      json(res, error.status, { error: error.message, retryAfter: error.retryAfter })
     } else {
       console.error('[kairus]', error)
       json(res, 500, { error: 'quelque chose a cédé de notre côté' })
