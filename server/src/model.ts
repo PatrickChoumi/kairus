@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { db, hasFullTextSearch } from './db.js'
+import { attachmentOf, attachmentsOf, eraseFor, type Attachment } from './files.js'
 
 export type User = {
   id: string
@@ -18,6 +19,8 @@ export type Message = {
   createdAt: number
   editedAt: number | null
   deletedAt: number | null
+  /** A file travelling with the message, if any. */
+  attachment: Attachment | null
 }
 
 export type Conversation = {
@@ -46,7 +49,7 @@ type MessageRow = {
   deleted_at: number | null
 }
 
-const toMessage = (r: MessageRow): Message => ({
+const toMessage = (r: MessageRow, attachment: Attachment | null = null): Message => ({
   id: r.id,
   conversationId: r.conversation_id,
   senderId: r.sender_id,
@@ -55,7 +58,14 @@ const toMessage = (r: MessageRow): Message => ({
   createdAt: r.created_at,
   editedAt: r.edited_at,
   deletedAt: r.deleted_at,
+  attachment,
 })
+
+/** Fills in the files for a batch, in one query rather than one per message. */
+const withAttachments = (rows: MessageRow[]): Message[] => {
+  const files = attachmentsOf(rows.map((r) => r.id))
+  return rows.map((row) => toMessage(row, files.get(row.id) ?? null))
+}
 
 /** The shape of a user that is safe to hand to anyone. */
 export const publicUser = (r: UserRow): User => ({
@@ -397,7 +407,7 @@ export function describeConversation(id: string, viewerId: string): Conversation
   return {
     id,
     peer: other,
-    lastMessage: last ? toMessage(last) : null,
+    lastMessage: last ? toMessage(last, attachmentOf(last.id)) : null,
     unread: unread.n,
     peerReadAt: theirs?.last_read_at ?? 0,
   }
@@ -430,6 +440,7 @@ export function addMessage(
   senderId: string,
   body: string,
   replyTo: string | null,
+  attachment: Attachment | null = null,
 ): Message {
   const message: Message = {
     id: randomUUID(),
@@ -440,6 +451,7 @@ export function addMessage(
     createdAt: Date.now(),
     editedAt: null,
     deletedAt: null,
+    attachment,
   }
   db.prepare(
     `INSERT INTO messages (id, conversation_id, sender_id, body, reply_to, created_at)
@@ -455,9 +467,17 @@ export function addMessage(
   return message
 }
 
+/** Just the conversation a message belongs to — used to guard its file. */
+export function findMessageConversation(id: string): string | null {
+  const row = db.prepare(`SELECT conversation_id AS c FROM messages WHERE id = ?`).get(id) as
+    | { c: string }
+    | undefined
+  return row?.c ?? null
+}
+
 export function findMessage(id: string): Message | undefined {
   const row = db.prepare(`SELECT * FROM messages WHERE id = ?`).get(id) as MessageRow | undefined
-  return row ? toMessage(row) : undefined
+  return row ? toMessage(row, attachmentOf(id)) : undefined
 }
 
 export type Revision = { ok: true; message: Message } | { ok: false; reason: RevisionRefusal }
@@ -470,7 +490,8 @@ export function reviseMessage(id: string, userId: string, body: string): Revisio
   if (existing.senderId !== userId) return { ok: false, reason: 'not-yours' }
   if (existing.deletedAt) return { ok: false, reason: 'retracted' }
   const text = body.trim()
-  if (!text) return { ok: false, reason: 'empty' }
+  // A message carrying a file may legitimately have nothing written on it.
+  if (!text && !existing.attachment) return { ok: false, reason: 'empty' }
   if (text === existing.body) return { ok: true, message: existing }
 
   const editedAt = Date.now()
@@ -490,7 +511,9 @@ export function retractMessage(id: string, userId: string): Revision {
 
   const deletedAt = Date.now()
   db.prepare(`UPDATE messages SET body = '', deleted_at = ? WHERE id = ?`).run(deletedAt, id)
-  return { ok: true, message: { ...existing, body: '', deletedAt } }
+  // Taking a message back has to take its file with it, off the disk.
+  eraseFor(id)
+  return { ok: true, message: { ...existing, body: '', deletedAt, attachment: null } }
 }
 
 export function listMessages(conversationId: string, before?: number, limit = 60): Message[] {
@@ -501,7 +524,7 @@ export function listMessages(conversationId: string, before?: number, limit = 60
        ORDER BY created_at DESC LIMIT ?`,
     )
     .all(conversationId, before ?? Number.MAX_SAFE_INTEGER, limit) as MessageRow[]
-  return rows.reverse().map(toMessage)
+  return withAttachments(rows.reverse())
 }
 
 export function markRead(conversationId: string, userId: string, at: number): number {
@@ -543,7 +566,11 @@ export function searchMessages(viewerId: string, query: string, limit = 12): Sea
     const conversation = describeConversation(row.conversation_id, viewerId)
     if (!conversation) return []
     return [
-      { message: toMessage(row), conversationId: row.conversation_id, peer: conversation.peer },
+      {
+        message: toMessage(row, attachmentOf(row.id)),
+        conversationId: row.conversation_id,
+        peer: conversation.peer,
+      },
     ]
   })
 }

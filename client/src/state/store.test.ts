@@ -43,6 +43,7 @@ const message = (over: Partial<Record<string, unknown>> = {}) => ({
   createdAt: 1000,
   editedAt: null,
   deletedAt: null,
+  attachment: null,
   ...over,
 })
 

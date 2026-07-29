@@ -3,7 +3,14 @@ import type { Inbound } from './types'
 
 export type Outbound =
   | { t: 'hello'; token: string }
-  | { t: 'send'; conversation: string; body: string; replyTo: string | null; nonce: string }
+  | {
+      t: 'send'
+      conversation: string
+      body: string
+      replyTo: string | null
+      nonce: string
+      attachment?: string
+    }
   | { t: 'revise'; message: string; body: string }
   | { t: 'retract'; message: string }
   | { t: 'typing'; conversation: string }

@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, type Ref } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react'
 import { useStore, useThread } from '../state/store'
 import { Sigil } from '../ui/Sigil'
 import { Bubble } from './Bubble'
 import { Composer } from './Composer'
+import { Lightbox } from './Lightbox'
 import { dayLabel, sameBreath, sameDay } from '../lib/time'
-import type { Conversation } from '../net/types'
+import type { Attachment, Conversation } from '../net/types'
 
 type Props = {
   conversation: Conversation
@@ -61,6 +62,11 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   }, [messages])
 
   const head = useRef<HTMLElement>(null)
+  const [looking, setLooking] = useState<{ attachment: Attachment; url: string } | null>(null)
+  const openImage = useCallback(
+    (attachment: Attachment, url: string) => setLooking({ attachment, url }),
+    [],
+  )
 
   const onScroll = () => {
     const el = stream.current
@@ -153,6 +159,7 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
                   onReply={setReply}
                   onEdit={setEdit}
                   onRetract={retract}
+                  onOpenImage={openImage}
                 />
               </div>
             )
@@ -169,6 +176,12 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
       </div>
 
       <Composer peerName={conversation.peer.name} />
+
+      <Lightbox
+        attachment={looking?.attachment ?? null}
+        url={looking?.url ?? null}
+        onClose={() => setLooking(null)}
+      />
     </div>
   )
 }

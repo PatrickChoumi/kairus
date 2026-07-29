@@ -48,7 +48,8 @@ export function buildPolicy(scriptHashes: string[]): string {
     `object-src 'none'`,
     `frame-ancestors 'none'`,
     `form-action 'self'`,
-    `img-src 'self' data:`,
+    // Attachments are fetched with the session and shown as object URLs.
+    `img-src 'self' data: blob:`,
     `font-src 'self'`,
     `style-src 'self'`,
     `script-src 'self' ${scriptHashes.join(' ')}`.trim(),

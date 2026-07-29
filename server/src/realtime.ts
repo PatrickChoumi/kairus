@@ -19,6 +19,7 @@ import {
 } from './model.js'
 import { shouldRenew, sign, verify } from './token.js'
 import { knock } from './push.js'
+import { attachmentOf, claim } from './files.js'
 import { count, gauge, log } from './log.js'
 
 type Outbound =
@@ -121,7 +122,7 @@ class Hub {
         await knock(userId, {
           conversationId: message.conversationId,
           from: sender.name,
-          body: message.body,
+          body: message.body || (message.attachment ? 'a envoyé un fichier' : ''),
         })
       } catch (error) {
         log.warn('push.knock.failed', { userId, error: String(error) })
@@ -319,7 +320,8 @@ function handleFrame(socket: Socket, frame: Record<string, unknown>): void {
   switch (type) {
     case 'send': {
       const body = str(frame, 'body').slice(0, 4000)
-      if (!conversation || !body) return
+      const attachmentId = str(frame, 'attachment')
+      if (!conversation || (!body && !attachmentId)) return
       if (!afford(socket, limits.write, userId, 'vous écrivez plus vite que nous ne pouvons suivre')) {
         return
       }
@@ -328,7 +330,13 @@ function handleFrame(socket: Socket, frame: Record<string, unknown>): void {
         return
       }
       const replyTo = str(frame, 'replyTo') || null
-      const message = addMessage(conversation, userId, body, replyTo)
+      const stored = addMessage(conversation, userId, body, replyTo)
+      // An upload only becomes part of the conversation once it is claimed by
+      // the message that carries it, and only by whoever uploaded it.
+      const message =
+        attachmentId && claim(attachmentId, userId, stored.id)
+          ? { ...stored, attachment: attachmentOf(stored.id) }
+          : stored
       count('messages_sent')
       const nonce = str(frame, 'nonce')
       send(socket, { t: 'message', message, ...(nonce ? { nonce } : {}) })

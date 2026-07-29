@@ -211,6 +211,7 @@ server {
 | `NODE_ENV`    | `production`                  | Déjà posé par le `Dockerfile`.                                                                                 |
 | `BACKUP_DIR`  | `/data/backups`               | Non défini : **aucune sauvegarde n'est prise**. C'est la différence entre un incident et une perte définitive.  |
 | `VAPID_*`     | la sortie de l'étape 1 bis    | Absentes : pas de notification hors application. Changées : tous les abonnements existants meurent.             |
+| `MAX_UPLOAD_BYTES` | `8388608` (8 Mo)         | Les pièces jointes vivent dans `<DATA_DIR>/files`, donc sur le volume. Dimensionnez-le en conséquence.          |
 | `METRICS_TOKEN` | une chaîne aléatoire        | Non défini : `/api/metrics` répond 404. Ne le publiez pas — il expose vos compteurs de connexion.               |
 | `CORS_ORIGIN` | **laisser vide**              | Inutile ici : le client est servi par le même serveur. Ne le remplissez que pour un front hébergé ailleurs.     |
 
@@ -287,7 +288,13 @@ Ce qui mérite une alerte : `backup.failed`, `push.failed` en rafale,
 
 ## Sauvegardes
 
-Le volume est le seul endroit où vivent vos données. La base est en mode WAL,
+Le volume porte la base **et** les pièces jointes (`<DATA_DIR>/files`). C'est
+le seul endroit où vivent vos données.
+
+> Les instantanés couvrent la base, **pas les fichiers**. Pour une sauvegarde
+> complète, copiez aussi `<DATA_DIR>/files` — un `docker cp` ou un `rsync` du
+> volume entier suffit.
+ La base est en mode WAL,
 donc **copier `kairus.db` seul donne une copie potentiellement incohérente** —
 les écritures récentes sont dans `kairus.db-wal`. Le serveur utilise l'API de
 sauvegarde de SQLite, qui prend un instantané cohérent d'une base vivante.

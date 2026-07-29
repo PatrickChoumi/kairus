@@ -3,7 +3,8 @@ import { SPRING } from '../motion/spring'
 import { useSpringHandle } from '../motion/hooks'
 import { rubberBand, useDrag } from '../motion/gesture'
 import { clock, exact } from '../lib/time'
-import type { Message } from '../net/types'
+import { Carried } from './Carried'
+import type { Attachment, Message } from '../net/types'
 
 type Props = {
   message: Message
@@ -18,6 +19,7 @@ type Props = {
   onReply: (message: Message) => void
   onEdit: (message: Message) => void
   onRetract: (message: Message) => void
+  onOpenImage: (attachment: Attachment, url: string) => void
 }
 
 const REPLY_AT = 56
@@ -38,6 +40,7 @@ export function Bubble({
   onReply,
   onEdit,
   onRetract,
+  onOpenImage,
 }: Props) {
   const row = useRef<HTMLDivElement>(null)
   const [held, setHeld] = useState(false)
@@ -86,6 +89,8 @@ export function Bubble({
       data-closes={closes || undefined}
       data-pending={message.pending || undefined}
       data-gone={gone || undefined}
+      data-carrying={message.attachment && !gone ? true : undefined}
+      data-wordless={message.attachment && !message.body && !gone ? true : undefined}
       data-held={held || undefined}
       ref={row}
       {...drag}
@@ -119,9 +124,14 @@ export function Bubble({
             message retiré
           </p>
         ) : (
-          <p className="bubble__body" id={`m-${message.id}`}>
-            {message.body}
-          </p>
+          <>
+            {message.attachment && <Carried message={message} onOpen={onOpenImage} />}
+            {message.body && (
+              <p className="bubble__body" id={`m-${message.id}`}>
+                {message.body}
+              </p>
+            )}
+          </>
         )}
 
         <span className="bubble__meta">

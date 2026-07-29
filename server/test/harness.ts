@@ -8,6 +8,8 @@
 process.env.NODE_ENV = 'test'
 process.env.JWT_SECRET ??= 'a-secret-that-only-the-tests-use'
 process.env.DATA_DIR = ':memory:'
+// Attachments are real bytes on a real disk even when the database is not.
+process.env.MAX_UPLOAD_BYTES ??= String(8 * 1024 * 1024)
 
 import { createServer, type Server } from 'node:http'
 import { AddressInfo } from 'node:net'
@@ -79,6 +81,20 @@ export async function call<T = Record<string, unknown>>(
 }
 
 export const socketOrigin = () => origin.replace('http://', 'ws://')
+
+/**
+ * A request carrying bytes rather than JSON — uploads and downloads. Kept here
+ * so no test has to know how the harness names its own origin.
+ */
+export function raw(
+  method: string,
+  path: string,
+  options: { token?: string; body?: BodyInit; headers?: Record<string, string> } = {},
+): Promise<Response> {
+  const headers: Record<string, string> = { ...options.headers }
+  if (options.token) headers.authorization = `Bearer ${options.token}`
+  return fetch(`${origin}${path}`, { method, headers, body: options.body })
+}
 
 /** Every table emptied, so one case cannot see another's leftovers. */
 export function wipe(): void {

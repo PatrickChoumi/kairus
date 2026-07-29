@@ -72,6 +72,22 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions (user_id);
 
+  CREATE TABLE IF NOT EXISTS attachments (
+    id          TEXT PRIMARY KEY,
+    uploader_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- Null until the message carrying it is actually sent.
+    message_id  TEXT REFERENCES messages(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    mime        TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    width       INTEGER,
+    height      INTEGER,
+    created_at  INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments (message_id);
+  CREATE INDEX IF NOT EXISTS idx_attachments_orphans ON attachments (message_id, created_at);
+
   CREATE INDEX IF NOT EXISTS idx_messages_conversation
     ON messages (conversation_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_participants_user

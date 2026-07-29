@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+} from 'react'
 import { useStore, useThread } from '../state/store'
 import { SPRING } from '../motion/spring'
 import { useSpringTo } from '../motion/hooks'
@@ -7,6 +14,7 @@ const MAX_HEIGHT = 168
 
 export function Composer({ peerName }: { peerName: string }) {
   const say = useStore((s) => s.say)
+  const attach = useStore((s) => s.attach)
   const revise = useStore((s) => s.revise)
   const breathe = useStore((s) => s.breathe)
   const replyTo = useStore((s) => s.replyTo)
@@ -18,8 +26,11 @@ export function Composer({ peerName }: { peerName: string }) {
   const messages = useThread(open)
 
   const [draft, setDraft] = useState('')
+  const [hovering, setHovering] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
   const send = useRef<HTMLButtonElement>(null)
+  const picker = useRef<HTMLInputElement>(null)
+  const dragDepth = useRef(0)
 
   const ready = draft.trim().length > 0
 
@@ -70,6 +81,30 @@ export function Composer({ peerName }: { peerName: string }) {
     requestAnimationFrame(resize)
   }
 
+  /** Files go with whatever was already written, as its caption. */
+  const carry = (files: File[]) => {
+    if (files.length === 0 || editing) return
+    const caption = draft.trim()
+    setDraft('')
+    requestAnimationFrame(resize)
+    void attach(files, caption)
+  }
+
+  const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = [...event.clipboardData.files]
+    if (files.length === 0) return
+    // A screenshot in the clipboard is the fastest way to send one.
+    event.preventDefault()
+    carry(files)
+  }
+
+  const onDrop = (event: DragEvent) => {
+    event.preventDefault()
+    dragDepth.current = 0
+    setHovering(false)
+    carry([...event.dataTransfer.files])
+  }
+
   const abandon = () => {
     setEdit(null)
     setDraft('')
@@ -105,7 +140,22 @@ export function Composer({ peerName }: { peerName: string }) {
   }
 
   return (
-    <div className="composer" data-editing={editing ? true : undefined}>
+    <div
+      className="composer"
+      data-editing={editing ? true : undefined}
+      data-hovering={hovering || undefined}
+      onDragEnter={(e) => {
+        e.preventDefault()
+        dragDepth.current += 1
+        if (!editing) setHovering(true)
+      }}
+      onDragOver={(e) => e.preventDefault()}
+      onDragLeave={() => {
+        dragDepth.current -= 1
+        if (dragDepth.current <= 0) setHovering(false)
+      }}
+      onDrop={onDrop}
+    >
       {(replyTo || editing) && (
         <div className="composer__reply">
           <span className="composer__reply-mark">{editing ? '✎' : '↩'}</span>
@@ -123,6 +173,35 @@ export function Composer({ peerName }: { peerName: string }) {
       )}
 
       <div className="composer__line">
+        <input
+          ref={picker}
+          className="composer__picker"
+          type="file"
+          multiple
+          onChange={(e) => {
+            carry([...(e.target.files ?? [])])
+            e.target.value = ''
+          }}
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+        <button
+          className="composer__clip"
+          type="button"
+          onClick={() => picker.current?.click()}
+          disabled={Boolean(editing)}
+          aria-label="joindre un fichier"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              d="M12 5v14M5 12h14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
         <textarea
           ref={area}
           className="composer__input"
@@ -134,6 +213,7 @@ export function Composer({ peerName }: { peerName: string }) {
             if (!editing) breathe()
           }}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           onFocus={() => {
             document.documentElement.dataset.writing = 'true'
           }}
@@ -171,6 +251,8 @@ export function Composer({ peerName }: { peerName: string }) {
           </svg>
         </button>
       </div>
+
+      {hovering && <div className="composer__catch">déposez pour envoyer</div>}
     </div>
   )
 }

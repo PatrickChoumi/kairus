@@ -95,6 +95,8 @@ export const limits = {
   open: new Limiter(30, 30 / 60),
   /** Searching — every keystroke in the Cursor reaches here. */
   look: new Limiter(30, 120),
+  /** Sending files: a handful at once, then a steady trickle. */
+  upload: new Limiter(10, 20),
 } as const
 
 /** Test seam: forget everything, so one case cannot starve the next. */

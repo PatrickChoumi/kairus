@@ -753,6 +753,12 @@ html[data-writing] .rail__hint {
   outline-offset: 2px;
 }
 
+/* The panel hangs below its own row, so the row has to outrank the ones that
+   come after it — otherwise the next message covers the buttons. */
+.bubble-row[data-held] {
+  z-index: 4;
+}
+
 .bubble-row__held {
   position: absolute;
   inset-block-start: calc(100% - 2px);
@@ -893,6 +899,189 @@ html[data-writing] .rail__hint {
   }
 }
 
+/* --------------------------------------------------------------- carried */
+
+.carried {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* A picture with nothing written on it is the bubble, not a thing inside it. */
+.bubble-row[data-wordless] .bubble {
+  padding: 4px;
+}
+
+.bubble-row[data-carrying] .bubble {
+  max-inline-size: min(78%, 22rem);
+}
+
+.carried--image {
+  background: var(--veil-high);
+  max-block-size: 60vh;
+  cursor: zoom-in;
+}
+
+.carried--image img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.carried__waiting {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.carried__waiting::before {
+  content: '';
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  animation: waking 1.6s ease-in-out infinite;
+}
+
+.carried__lost {
+  position: absolute;
+  inset-block-end: 8px;
+  inset-inline-start: 8px;
+  font-size: 0.6875rem;
+  color: var(--ink-faint);
+}
+
+/* The upload, drawn along the bottom edge of its own picture. */
+.carried__progress {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline: 0;
+  block-size: 3px;
+  background: rgb(0 0 0 / 25%);
+}
+
+.carried__progress span {
+  display: block;
+  block-size: 100%;
+  inline-size: calc(var(--done, 0) * 100%);
+  background: var(--accent-ink);
+  transition: inline-size 0.2s ease;
+}
+
+.carried--file {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px;
+  margin-block-end: 2px;
+  border: 1px solid var(--hair-strong);
+  border-radius: 12px;
+  text-align: start;
+  transition: border-color 0.2s ease;
+}
+
+.carried--file:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.bubble-row[data-mine] .carried--file {
+  border-color: color-mix(in oklab, var(--accent-ink) 35%, transparent);
+}
+
+.carried__glyph {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: 50%;
+  border: 1px solid currentcolor;
+  font-size: 0.875rem;
+  opacity: 0.7;
+}
+
+.carried__about {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.carried__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+
+.carried__size {
+  font-size: 0.6875rem;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------- lightbox */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  place-items: center;
+  gap: 14px;
+  padding: max(4vh, 24px) var(--gutter);
+  background: color-mix(in oklab, #05050a 88%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.lightbox__picture {
+  display: grid;
+  place-items: center;
+  min-block-size: 0;
+  max-inline-size: 100%;
+  will-change: transform;
+}
+
+.lightbox__picture img {
+  max-inline-size: 100%;
+  max-block-size: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.lightbox__foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-inline-size: 100%;
+  padding: 8px 14px;
+  border-radius: 99px;
+  background: rgb(255 255 255 / 8%);
+  font-size: 0.8125rem;
+  color: rgb(255 255 255 / 88%);
+}
+
+.lightbox__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lightbox__size {
+  color: rgb(255 255 255 / 55%);
+  font-variant-numeric: tabular-nums;
+}
+
+.lightbox__foot button {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* --------------------------------------------------------------- composer */
 
 .composer {
@@ -950,6 +1139,68 @@ html[data-writing] .rail__hint {
 
 .composer__line:focus-within {
   border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+
+.composer__picker {
+  display: none;
+}
+
+/* Nothing at rest: the clip only surfaces once the composer is in use. */
+.composer__clip {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  inline-size: 30px;
+  block-size: 30px;
+  margin-inline-start: -6px;
+  border-radius: 50%;
+  color: var(--ink-faint);
+  opacity: 0;
+  transform: scale(0.7);
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    color 0.15s ease;
+}
+
+.composer:hover .composer__clip,
+.composer__line:focus-within .composer__clip {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.composer__clip:hover {
+  color: var(--ink);
+}
+
+.composer__clip:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.composer[data-hovering] .composer__line {
+  border-color: var(--accent);
+  border-style: dashed;
+}
+
+.composer__catch {
+  position: absolute;
+  inset-block-end: calc(100% + 6px);
+  inset-inline: var(--gutter);
+  padding: 10px;
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius-panel);
+  background: color-mix(in oklab, var(--bg) 88%, transparent);
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+
+.composer {
+  position: relative;
 }
 
 .composer__input {

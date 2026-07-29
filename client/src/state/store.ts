@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { api, ApiError, getToken, setToken } from '../net/api'
 import { connection, type Link } from '../net/socket'
 import { disablePush, enablePush, pushState, type PushState } from '../net/push'
+import { forgetAttachment, forgetAttachments } from '../net/blobs'
+import { prepare, upload, UploadError } from '../net/files'
 import type { Conversation, Message, User } from '../net/types'
 
 export type Theme = 'dark' | 'light'
@@ -46,6 +48,8 @@ type Actions = {
   startWith: (handle: string) => Promise<string | null>
 
   say: (body: string) => void
+  /** Sends one or more files, each as its own message. */
+  attach: (files: File[], caption?: string) => Promise<void>
   reply: (message: Message | null) => void
   edit: (message: Message | null) => void
   revise: (body: string) => void
@@ -150,6 +154,10 @@ export const useStore = create<State & Actions>((set, get) => {
    */
   const absorbRevision = (message: Message) => {
     const state = get()
+    const previous = state.messages[message.conversationId]?.find((m) => m.id === message.id)
+    // A retraction has to take the picture off this screen too, not just off
+    // the server — otherwise it lingers until the tab is closed.
+    if (message.deletedAt && previous?.attachment) forgetAttachment(previous.attachment.id)
     const list = state.messages[message.conversationId]
     if (list) {
       set({
@@ -417,6 +425,7 @@ export const useStore = create<State & Actions>((set, get) => {
 
     signOut() {
       connection.close()
+      forgetAttachments()
       setToken(null)
       set({
         status: 'out',
@@ -478,6 +487,7 @@ export const useStore = create<State & Actions>((set, get) => {
         createdAt: Date.now(),
         editedAt: null,
         deletedAt: null,
+        attachment: null,
         pending: true,
       }
       absorb(optimistic)
@@ -490,6 +500,75 @@ export const useStore = create<State & Actions>((set, get) => {
         replyTo: replyTo?.id ?? null,
         nonce,
       })
+    },
+
+    /**
+     * A file goes up first, then the message that carries it. The bubble
+     * appears immediately with a local preview and a progress figure, so the
+     * wait happens inside the conversation rather than in front of it.
+     */
+    async attach(files, caption) {
+      const { open, me } = get()
+      if (!open || !me || files.length === 0) return
+
+      for (const [index, file] of files.entries()) {
+        const nonce = `pending:${crypto.randomUUID()}`
+        let preview: string | undefined
+        try {
+          const prepared = await prepare(file)
+          if (prepared.type.startsWith('image/')) preview = URL.createObjectURL(prepared.blob)
+
+          absorb({
+            id: nonce,
+            conversationId: open,
+            senderId: me.id,
+            // Only the first of a batch carries what was written.
+            body: index === 0 ? (caption ?? '').trim() : '',
+            replyTo: null,
+            createdAt: Date.now(),
+            editedAt: null,
+            deletedAt: null,
+            attachment: {
+              id: nonce,
+              name: prepared.name,
+              mime: prepared.type,
+              size: prepared.blob.size,
+              width: prepared.width,
+              height: prepared.height,
+            },
+            pending: true,
+            progress: 0,
+            preview,
+          })
+
+          const attachment = await upload(prepared, (fraction) => {
+            const list = get().messages[open] ?? []
+            set({
+              messages: {
+                ...get().messages,
+                [open]: list.map((m) => (m.id === nonce ? { ...m, progress: fraction } : m)),
+              },
+            })
+          })
+
+          connection.send({
+            t: 'send',
+            conversation: open,
+            body: index === 0 ? (caption ?? '').trim() : '',
+            replyTo: null,
+            nonce,
+            attachment: attachment.id,
+          })
+        } catch (problem) {
+          if (preview) URL.revokeObjectURL(preview)
+          // Drop the hopeful bubble rather than leave it stuck at 40%.
+          const list = get().messages[open] ?? []
+          set({
+            messages: { ...get().messages, [open]: list.filter((m) => m.id !== nonce) },
+            notice: problem instanceof UploadError ? problem.message : 'l’envoi a échoué',
+          })
+        }
+      }
     },
 
     reply(message) {

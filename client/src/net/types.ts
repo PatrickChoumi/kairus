@@ -5,6 +5,15 @@ export type User = {
   hue: number
 }
 
+export type Attachment = {
+  id: string
+  name: string
+  mime: string
+  size: number
+  width: number | null
+  height: number | null
+}
+
 export type Message = {
   id: string
   conversationId: string
@@ -16,8 +25,14 @@ export type Message = {
   editedAt: number | null
   /** When the sender took it back — the body is empty from then on. */
   deletedAt: number | null
+  /** A file travelling with the message, if any. */
+  attachment: Attachment | null
   /** Set while a message is still in flight, cleared when the server confirms. */
   pending?: boolean
+  /** 0…1 while the file is on its way up. Local only. */
+  progress?: number
+  /** A local object URL, so an outgoing image shows before it has uploaded. */
+  preview?: string
 }
 
 export type Conversation = {

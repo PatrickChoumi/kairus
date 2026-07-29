@@ -10,6 +10,7 @@ import {
   describeConversation,
   findLiveIdentity,
   findUserByHandle,
+  findMessageConversation,
   findUserRow,
   isBlocked,
   isHandle,
@@ -43,6 +44,17 @@ import {
   subscriptionCount,
 } from './push.js'
 import { asPrometheus, count, log, snapshot } from './log.js'
+import {
+  attachmentOf,
+  claim,
+  findAttachment,
+  isDisplayable,
+  MAX_BYTES,
+  openAttachment,
+  receive,
+  servingHeaders,
+  TooLarge,
+} from './files.js'
 
 export class HttpError extends Error {
   constructor(
@@ -223,14 +235,19 @@ const authed: Record<string, Handler> = {
     if (!isParticipant(conversationId, userId)) {
       throw new HttpError(404, 'cette conversation n’existe pas')
     }
-    if (!text) throw new HttpError(400, 'message vide')
+    const attachmentId = field(body, 'attachment')
+    if (!text && !attachmentId) throw new HttpError(400, 'message vide')
     if (blockedInConversation(conversationId, userId)) {
       throw new HttpError(403, 'cette conversation est fermée')
     }
     const replyTo = field(body, 'replyTo') || null
     const message = addMessage(conversationId, userId, text.slice(0, 4000), replyTo)
-    hub.broadcastMessage(message)
-    return { message }
+    if (attachmentId && !claim(attachmentId, userId, message.id)) {
+      throw new HttpError(404, 'ce fichier n’est plus disponible')
+    }
+    const carried = attachmentId ? { ...message, attachment: attachmentOf(message.id) } : message
+    hub.broadcastMessage(carried)
+    return { message: carried }
   },
 
   'POST /api/messages/revise': ({ userId, body }) => {
@@ -431,6 +448,24 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
   const startedAt = performance.now()
   count('http.requests')
 
+  // Uploads and downloads carry bytes, not JSON, so they never reach the
+  // handler table — its body reader would refuse them at 64 KB.
+  if (key === 'POST /api/files' || url.pathname.startsWith('/api/files/')) {
+    try {
+      await carryFile(req, res, url, address)
+    } catch (error) {
+      if (error instanceof HttpError) {
+        if (error.retryAfter) res.setHeader('retry-after', String(error.retryAfter))
+        json(res, error.status, { error: error.message, retryAfter: error.retryAfter })
+      } else {
+        count('http.status.500')
+        log.error('files.failed', { error: String(error) })
+        json(res, 500, { error: 'quelque chose a cédé de notre côté' })
+      }
+    }
+    return true
+  }
+
   try {
     spend(limits.anything, address, 'trop de requêtes')
 
@@ -479,6 +514,80 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
     ms: Math.round(performance.now() - startedAt),
   })
   return true
+}
+
+/* ------------------------------------------------------------------- files */
+
+const whoIsAsking = (req: IncomingMessage) => {
+  const claims = verify(req.headers.authorization?.replace(/^Bearer /i, ''))
+  const user = claims ? findLiveIdentity(claims.userId, claims.version) : undefined
+  if (!user) throw new HttpError(401, 'session expirée')
+  return user
+}
+
+const numeric = (value: string | undefined): number | null => {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 && n < 100_000 ? Math.round(n) : null
+}
+
+async function carryFile(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  address: string,
+): Promise<void> {
+  /* -- receiving ---------------------------------------------------------- */
+  if (req.method === 'POST') {
+    const user = whoIsAsking(req)
+    spend(limits.upload, user.id, 'trop de fichiers d’un coup')
+    void address
+
+    const declared = Number(req.headers['content-length'] ?? 0)
+    if (declared > MAX_BYTES) {
+      throw new HttpError(413, `un fichier fait au plus ${Math.floor(MAX_BYTES / 1048576)} Mo`)
+    }
+    try {
+      const attachment = await receive(req, user.id, {
+        name: decodeURIComponent(String(req.headers['x-file-name'] ?? 'fichier')),
+        mime: String(req.headers['content-type'] ?? 'application/octet-stream').split(';')[0] ?? '',
+        width: numeric(req.headers['x-file-width'] as string | undefined),
+        height: numeric(req.headers['x-file-height'] as string | undefined),
+      })
+      count('files.received')
+      json(res, 200, { attachment })
+    } catch (error) {
+      if (error instanceof TooLarge) {
+        throw new HttpError(413, `un fichier fait au plus ${Math.floor(MAX_BYTES / 1048576)} Mo`)
+      }
+      throw error
+    }
+    return
+  }
+
+  /* -- serving ------------------------------------------------------------ */
+  if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'méthode refusée')
+
+  const user = whoIsAsking(req)
+  const id = url.pathname.slice('/api/files/'.length)
+  const row = findAttachment(id)
+  if (!row) throw new HttpError(404, 'ce fichier n’existe plus')
+
+  // Before it is attached only its uploader may see it; afterwards, whoever
+  // can read the conversation it belongs to.
+  const allowed = row.message_id
+    ? isParticipant(findMessageConversation(row.message_id) ?? '', user.id)
+    : row.uploader_id === user.id
+  if (!allowed) throw new HttpError(404, 'ce fichier n’existe plus')
+
+  const stream = openAttachment(id)
+  if (!stream) throw new HttpError(404, 'ce fichier n’existe plus')
+
+  res.writeHead(200, servingHeaders(row))
+  if (req.method === 'HEAD') {
+    res.end()
+    return
+  }
+  stream.pipe(res)
 }
 
 /** Prometheus scrape, same guard as the JSON snapshot. */

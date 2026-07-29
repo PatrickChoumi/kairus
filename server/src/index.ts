@@ -7,6 +7,7 @@ import { attachRealtime } from './realtime.js'
 import { serveClient } from './static.js'
 import { applySecurityHeaders } from './headers.js'
 import { startBackups } from './backup.js'
+import { startFileSweeper } from './files.js'
 import { log } from './log.js'
 import { pushEnabled } from './push.js'
 
@@ -26,6 +27,7 @@ const server = createServer((req, res) => {
 
 const closeRealtime = attachRealtime(server, env.trustProxy)
 const stopBackups = startBackups()
+const stopSweeper = startFileSweeper()
 
 server.listen(env.port, env.host, () => {
   log.info('listening', { host: env.host, port: env.port, push: pushEnabled })
@@ -34,6 +36,7 @@ server.listen(env.port, env.host, () => {
 const shutdown = () => {
   log.info('shutting down')
   stopBackups()
+  stopSweeper()
   closeRealtime()
   server.close(() => process.exit(0))
   setTimeout(() => process.exit(0), 5_000).unref()

@@ -58,6 +58,10 @@ n'ait qu'un seul endroit où se poser. Thèmes clair et sombre, avec respect de
 - Messages en temps réel par WebSocket, avec envoi optimiste et réconciliation
 - Correction et retrait d'un message, propagés aux deux côtés ; un message
   retiré garde sa place pour que les citations continuent de résoudre
+- **Pièces jointes** : images et fichiers, par le sélecteur, un glisser-déposer
+  ou un simple collage. Les images sont réduites dans le navigateur avant de
+  partir, s'affichent à leurs proportions dès l'apparition de la bulle, et
+  s'ouvrent en pleine surface
 - Réponses citées, avec saut vers le message cité
 - Indicateur de frappe, présence, accusés de lecture, compteurs de non-lus
 - Recherche dans l'historique sur un index FTS5 ; les personnes se trouvent par
@@ -134,6 +138,16 @@ La permission n'est **jamais** demandée au chargement — seulement quand on la
 choisit depuis le Curseur, parce qu'une demande non sollicitée se fait refuser
 une fois et bloque la fonctionnalité pour de bon.
 
+**Fichiers.** Le risque n'est pas la réception, c'est le **service** : un
+fichier choisi par quelqu'un d'autre, servi en ligne depuis votre propre
+origine, est une injection de script qui attend. Seule une courte liste de
+types d'images est affichée en place ; tout le reste part en téléchargement
+opaque, avec un type que le navigateur n'essaiera pas d'interpréter — un SVG
+n'est jamais rendu, il transporte du script. L'accès suit celui de la
+conversation : un tiers reçoit 404, pas 403, pour ne pas confirmer l'existence
+du fichier. Un envoi dont le message n'est jamais parti est balayé après une
+heure ; un message retiré emporte son fichier du disque.
+
 **Sauvegardes.** Avec `BACKUP_DIR`, le serveur prend un instantané cohérent au
 démarrage puis toutes les 24 h, et ne garde que les sept derniers. Une
 sauvegarde qui tourne sans qu'on y pense vaut mieux qu'une procédure
@@ -183,15 +197,16 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 104 tests : 62 côté serveur, 42 côté client
+npm test                   # 121 tests : 79 côté serveur, 42 côté client
 npm run typecheck          # serveur et client
 ```
 
 **Serveur** (`node:test`, serveur réel, base en mémoire) : limitation de débit,
 révocation de jeton, récupération de compte, permissions sur les messages — on
 ne réécrit pas les mots d'un autre —, recherche et sa robustesse, blocage,
-en-têtes de sécurité, sauvegardes, abonnements push et compteurs, et le
-WebSocket sous charge et à l'éviction.
+en-têtes de sécurité, sauvegardes, abonnements push et compteurs, pièces
+jointes — qui peut les lire, ce qui n'est jamais affiché en place, ce qui est
+balayé —, et le WebSocket sous charge et à l'éviction.
 
 **Client** (`vitest`, jsdom) : la souscription aux notifications, le lien temps
 réel et la réconciliation optimiste, c'est-à-dire les endroits où une messagerie
@@ -233,6 +248,8 @@ après mise en ligne, et la bonne façon de sauvegarder une base en mode WAL.
 | `BACKUP_DIR`  | Active les sauvegardes automatiques. Non défini, il n'y en a aucune. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Activent les notifications hors application. `npm run vapid --prefix server` les génère. Absentes, le push est simplement éteint. |
 | `PUSH_PREVIEW` | `0` pour ne rien révéler sur l'écran verrouillé.                  |
+| `MAX_UPLOAD_BYTES` | Taille maximale d'un fichier. 8 Mo par défaut.                |
+| `FILES_DIR`   | Où vivent les pièces jointes. `<DATA_DIR>/files` par défaut.      |
 | `METRICS_TOKEN` | Ouvre `/api/metrics`. Non défini, la route répond 404.           |
 | `LOG_LEVEL`, `LOG_FORMAT` | `info` par défaut ; `LOG_FORMAT=pretty` pour un terminal. |
 | `TRUST_PROXY` | Nombre de proxys devant le serveur. `0` par défaut. Mettre `1` derrière Railway, Fly ou un reverse proxy, sinon la limitation de débit voit une seule adresse pour tout le monde. |
@@ -256,6 +273,7 @@ server/
   src/limiter.ts   token buckets, et toute la politique de limites en un lieu
   src/headers.ts   CSP et en-têtes de sécurité, hachage du script inline
   src/backup.ts    instantanés cohérents, planifiés et élagués
+  src/files.ts     pièces jointes : réception en flux, service, balayage
   src/push.ts      Web Push : abonnements, envoi, élagage des appareils morts
   src/log.ts       journaux JSON et compteurs, sans dépendance
   src/router.ts    routes HTTP sur node:http, sans framework
@@ -287,6 +305,7 @@ Les messages passent par le WebSocket, mais tout est aussi accessible en HTTP.
 | `POST /api/account/revoke`         | Fermer toutes les autres sessions       |
 | `GET`/`POST /api/blocks`           | Lister ou bloquer quelqu'un             |
 | `POST /api/blocks/remove`          | Débloquer                               |
+| `POST /api/files`, `GET /api/files/:id` | Envoyer un fichier, le récupérer   |
 | `GET`/`POST /api/push`             | Clé publique, abonner ou désabonner un appareil |
 | `GET /api/health`                  | Sonde de disponibilité                  |
 | `GET /api/metrics`                 | Compteurs, derrière `METRICS_TOKEN`     |
@@ -308,7 +327,7 @@ dessus :
 
 - **Chiffrement de bout en bout.** Les messages sont en clair dans SQLite.
   Kairus protège l'accès, pas le contenu.
-- **Pièces jointes.** Texte uniquement — ni image, ni fichier, ni voix.
+- **Messages vocaux.** Les fichiers passent, mais rien n'enregistre.
 - **Groupes.** Conversations à deux seulement.
 - **Modération.** Le blocage existe désormais, mais il n'y a ni signalement, ni
   administration, ni recours.
