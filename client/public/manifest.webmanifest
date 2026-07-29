@@ -1,0 +1,26 @@
+{
+  "name": "Kairus",
+  "short_name": "Kairus",
+  "description": "Une messagerie où l'interface disparaît.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0a0d",
+  "theme_color": "#0a0a0d",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/mark-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

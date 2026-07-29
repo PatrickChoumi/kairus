@@ -1,0 +1,63 @@
+/*
+ * Kairus design tokens.
+ *
+ * One accent colour, used only for what you wrote yourself and for focus.
+ * Everything else is monochrome, so the eye has exactly one place to land.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #0a0a0d;
+  --veil: #141419;
+  --veil-high: #1b1b22;
+  --ink: #f0f0f4;
+  --ink-soft: #9b9ba8;
+  --ink-faint: #5d5d6b;
+  --hair: rgb(255 255 255 / 8%);
+  --hair-strong: rgb(255 255 255 / 14%);
+
+  --accent: #6a5af9;
+  --accent-ink: #f4f2ff;
+  --accent-glow: rgb(106 90 249 / 32%);
+
+  --shadow-lift: 0 1px 2px rgb(0 0 0 / 30%), 0 12px 40px -12px rgb(0 0 0 / 60%);
+  --shadow-float: 0 24px 70px -20px rgb(0 0 0 / 75%);
+
+  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Inter,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  --text: 0.9375rem;
+  --text-meta: 0.75rem;
+  --text-title: 1rem;
+  --tracking: -0.011em;
+
+  --unit: 4px;
+  --gutter: clamp(16px, 4vw, 28px);
+  --column: 41rem;
+
+  --radius-bubble: 18px;
+  --radius-panel: 20px;
+  --radius-field: 14px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #fbfbfc;
+  --veil: #ffffff;
+  --veil-high: #f2f2f5;
+  --ink: #15151a;
+  --ink-soft: #62626f;
+  --ink-faint: #9797a4;
+  --hair: rgb(16 16 24 / 9%);
+  --hair-strong: rgb(16 16 24 / 16%);
+
+  --accent: #5749ea;
+  --accent-ink: #ffffff;
+  --accent-glow: rgb(87 73 234 / 22%);
+
+  --shadow-lift: 0 1px 2px rgb(16 16 24 / 6%), 0 12px 32px -14px rgb(16 16 24 / 22%);
+  --shadow-float: 0 24px 64px -22px rgb(16 16 24 / 30%);
+}

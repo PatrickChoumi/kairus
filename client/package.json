@@ -1,17 +1,25 @@
 {
   "name": "kairus-client",
-  "version": "0.1.0",
   "private": true,
+  "version": "1.0.0",
   "type": "module",
-  "scripts": { "dev": "vite", "build": "tsc -b && vite build", "preview": "vite preview" },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --pretty false"
+  },
   "dependencies": {
-    "react": "^18.3.1", "react-dom": "^18.3.1", "react-router-dom": "^6.28.0",
-    "socket.io-client": "^4.8.1", "zustand": "^5.0.1"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.2"
   },
   "devDependencies": {
-    "@types/react": "^18.3.12", "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.4", "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49", "tailwindcss": "^3.4.15",
-    "typescript": "^5.6.3", "vite": "^6.0.3"
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
   }
 }
