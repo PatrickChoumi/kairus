@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { useStore, useThread } from '../state/store'
 import { Sigil } from '../ui/Sigil'
+import { Icon } from '../ui/Icon'
 import { Bubble } from './Bubble'
 import { Composer } from './Composer'
 import { Lightbox } from './Lightbox'
@@ -45,6 +46,7 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   const setEdit = useStore((s) => s.edit)
   const retract = useStore((s) => s.retract)
   const setCursor = useStore((s) => s.setCursor)
+  const ringUp = useStore((s) => s.ringUp)
 
   const stream = useRef<HTMLDivElement>(null)
   const wasNearBottom = useRef(true)
@@ -115,7 +117,7 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
     <div className="thread" data-reading={reading || undefined}>
       <header className="bar" ref={head}>
         <button className="bar__back" onClick={onLeave} aria-label="revenir à la liste">
-          ‹
+          <Icon name="back" size={22} />
         </button>
 
         <Sigil
@@ -132,7 +134,18 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
         </span>
 
         <div className="bar__acts">
-          <button onClick={() => setCursor(true)}>chercher</button>
+          {conversation.kind === 'direct' && (
+            <button
+              onClick={() => ringUp(conversation.id)}
+              aria-label={`appeler ${conversation.face.name}`}
+              title="appeler"
+            >
+              <Icon name="phone" />
+            </button>
+          )}
+          <button onClick={() => setCursor(true)} aria-label="chercher" title="chercher">
+            <Icon name="search" />
+          </button>
           <button
             className="bar__more"
             data-menu-toggle
@@ -140,7 +153,7 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
             aria-label="options de la conversation"
             aria-expanded={menu}
           >
-            ···
+            <Icon name="more" />
           </button>
         </div>
 

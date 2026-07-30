@@ -1,7 +1,14 @@
 import { after, before, beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { call, db, raw, register, start, stop, wipe, type Account } from './harness.js'
-import { isDisplayable, servingHeaders, sweepOrphans, tameName } from '../src/files.js'
+import {
+  isAudible,
+  isDisplayable,
+  servingHeaders,
+  sweepOrphans,
+  tameName,
+  tamePeaks,
+} from '../src/files.js'
 
 before(start)
 after(stop)
@@ -258,4 +265,61 @@ test('a sent file is never swept', async () => {
   assert.equal(sweepOrphans(Date.now() + 30 * 24 * 3600_000), 0)
   const still = await fetchFile(up.body.attachment.id, ada.token)
   assert.equal(still.status, 200)
+})
+
+/* ------------------------------------------------------------------- voice */
+
+test('a voice message keeps how long it runs and the shape to draw', async () => {
+  const ada = await register('ada')
+  const up = await raw('POST', '/api/files', {
+    token: ada.token,
+    headers: {
+      'content-type': 'audio/webm',
+      'x-file-name': 'voix.webm',
+      'x-file-duration': '7.42',
+      'x-file-peaks': '12,90,44,8',
+    },
+    body: Buffer.from('opus-ish bytes'),
+  })
+  const { attachment } = (await up.json()) as {
+    attachment: { duration: number; peaks: string; mime: string }
+  }
+
+  assert.equal(attachment.mime, 'audio/webm')
+  assert.ok(Math.abs(attachment.duration - 7.42) < 0.001)
+  assert.equal(attachment.peaks, '12,90,44,8')
+})
+
+test('a waveform that is not one is refused rather than stored', () => {
+  assert.equal(tamePeaks('<script>alert(1)</script>'), null)
+  assert.equal(tamePeaks(undefined), null)
+  assert.equal(tamePeaks(''), null)
+  // Out of range values are pulled back into it, not thrown away.
+  assert.equal(tamePeaks('-40,0,50,900'), '0,0,50,100')
+  // And it can never grow without bound.
+  assert.equal(tamePeaks(Array(400).fill('50').join(',')).split(',').length, 64)
+})
+
+test('sound is served in place, so it can be played rather than downloaded', () => {
+  const headers = servingHeaders({
+    id: 'a',
+    name: 'voix.webm',
+    mime: 'audio/webm',
+    size: 10,
+  })
+  assert.equal(headers['content-type'], 'audio/webm')
+  assert.match(String(headers['content-disposition']), /^inline/)
+  assert.equal(headers['x-content-type-options'], 'nosniff')
+})
+
+test('an audio type nobody listed is still handed over opaquely', () => {
+  assert.equal(isAudible('audio/webm'), true)
+  assert.equal(isAudible('audio/flac'), false)
+  const headers = servingHeaders({
+    id: 'a',
+    name: 'piège.flac',
+    mime: 'audio/flac',
+    size: 10,
+  })
+  assert.equal(headers['content-type'], 'application/octet-stream')
 })

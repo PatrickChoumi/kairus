@@ -97,6 +97,12 @@ export const limits = {
   look: new Limiter(30, 120),
   /** Sending files: a handful at once, then a steady trickle. */
   upload: new Limiter(10, 20),
+  /**
+   * Placing calls. Only the ring is counted — the candidates that follow are
+   * many and arrive in a burst by nature, and the frame ceiling already covers
+   * them. Ringing someone repeatedly is the thing worth slowing down.
+   */
+  ring: new Limiter(6, 6 / 5),
 } as const
 
 /** Test seam: forget everything, so one case cannot starve the next. */

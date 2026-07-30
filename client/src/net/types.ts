@@ -12,6 +12,10 @@ export type Attachment = {
   size: number
   width: number | null
   height: number | null
+  /** Seconds — set only on a voice message. */
+  duration: number | null
+  /** 0…100 loudness samples, comma-separated: the shape of the waveform. */
+  peaks: string | null
 }
 
 export type Message = {
@@ -56,8 +60,33 @@ export type SearchHit = {
   face: Face
 }
 
+/** What one end of a call says to the other; the server only carries it. */
+export type CallAct =
+  | 'ring'
+  | 'accept'
+  | 'decline'
+  | 'busy'
+  | 'end'
+  | 'offer'
+  | 'answer'
+  | 'ice'
+
 export type Inbound =
-  | { t: 'ready'; user: User; conversations: Conversation[]; token?: string }
+  | {
+      t: 'ready'
+      user: User
+      conversations: Conversation[]
+      token?: string
+      ice?: RTCIceServer[]
+    }
+  | {
+      t: 'call'
+      act: CallAct
+      conversation: string
+      call: string
+      from: string
+      payload?: unknown
+    }
   | { t: 'message'; message: Message; nonce?: string }
   /** The same message in a new state: rewritten, or taken back. */
   | { t: 'revised'; message: Message }

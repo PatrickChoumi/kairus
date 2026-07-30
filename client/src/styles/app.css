@@ -85,6 +85,44 @@
   color: var(--ink-faint);
 }
 
+/* ------------------------------------------------------------------ icons */
+
+.icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+/*
+ * One shape for every icon-only control: a square that lights up under the
+ * pointer. Consistency here is most of what makes a row of icons legible.
+ */
+.knob,
+.rail__acts button,
+.bar__acts button,
+.line__acts button,
+.composer__clip,
+.composer__mic,
+.composer__drop {
+  display: grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 50%;
+  color: var(--ink-soft);
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.rail__acts button:hover,
+.bar__acts button:hover,
+.composer__clip:hover:not(:disabled),
+.composer__mic:hover,
+.composer__drop:hover {
+  background: var(--veil-high);
+  color: var(--ink);
+}
+
 .wordmark {
   font-size: 0.8125rem;
   font-weight: 400;
@@ -125,7 +163,7 @@
   inline-size: calc(var(--size) * 0.26);
   block-size: calc(var(--size) * 0.26);
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--live);
   box-shadow: 0 0 0 2px var(--bg);
 }
 
@@ -221,7 +259,7 @@
 
 .threshold__error[data-shown] {
   opacity: 1;
-  color: hsl(6 62% 62%);
+  color: var(--grave);
 }
 
 .threshold__ways {
@@ -353,36 +391,17 @@
 }
 
 .link[data-link='live'] {
-  background: var(--accent);
+  background: var(--live);
 }
 
 .link[data-link='reaching'] {
-  background: hsl(38 74% 56%);
+  background: #e0af68;
   animation: waking 1.4s ease-in-out infinite;
 }
 
-/* Named actions rather than icons: there are four, and words are clearer. */
 .rail__acts {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.rail__acts button,
-.bar__acts button {
-  padding: 5px 10px;
-  border-radius: var(--radius-tight);
-  font-size: var(--text-meta);
-  color: var(--ink-soft);
-  transition:
-    background-color 0.16s ease,
-    color 0.16s ease;
-}
-
-.rail__acts button:hover,
-.bar__acts button:hover {
-  background: var(--veil);
-  color: var(--ink);
+  gap: 2px;
 }
 
 .rail__list {
@@ -540,16 +559,22 @@
 }
 
 .rail__void-acts button {
-  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
   border: 1px solid var(--hair-strong);
   border-radius: var(--radius);
   font-size: 0.8125rem;
   color: var(--ink);
-  transition: border-color 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease;
 }
 
 .rail__void-acts button:hover {
-  border-color: var(--accent);
+  border-color: transparent;
+  background: var(--veil-high);
 }
 
 .rail__foot {
@@ -596,21 +621,19 @@ kbd {
 }
 
 .bar__back {
-  inline-size: 28px;
-  block-size: 28px;
+  inline-size: 32px;
+  block-size: 32px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-tight);
+  border-radius: 50%;
   color: var(--ink-soft);
-  font-size: 1.125rem;
-  line-height: 1;
   transition:
     background-color 0.16s ease,
     color 0.16s ease;
 }
 
 .bar__back:hover {
-  background: var(--veil);
+  background: var(--veil-high);
   color: var(--ink);
 }
 
@@ -637,11 +660,6 @@ kbd {
 .bar__acts {
   display: flex;
   gap: 2px;
-}
-
-.bar__more {
-  min-inline-size: 30px;
-  letter-spacing: 0.08em;
 }
 
 /* ------------------------------------------------------------------ menu */
@@ -679,7 +697,7 @@ kbd {
 }
 
 .menu__grave:hover {
-  color: hsl(6 62% 64%);
+  color: var(--grave);
 }
 
 .menu__note {
@@ -871,16 +889,16 @@ kbd {
   color: var(--ink-faint);
 }
 
+/* One tick sent, two ticks read — the shorthand everyone already reads. */
 .bubble__seen {
-  inline-size: 5px;
-  block-size: 5px;
-  border-radius: 50%;
-  border: 1px solid currentcolor;
+  display: grid;
+  place-items: center;
+  opacity: 0.75;
 }
 
 .bubble__seen[data-read] {
-  background: var(--accent);
-  border-color: var(--accent);
+  color: var(--accent);
+  opacity: 1;
 }
 
 .line__cue {
@@ -907,10 +925,8 @@ kbd {
 .line__acts {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-inline: 10px;
-  font-size: var(--text-label);
-  color: var(--ink-faint);
+  gap: 2px;
+  padding-inline: 6px;
   opacity: 0;
   transition: opacity 0.16s ease;
 }
@@ -926,17 +942,18 @@ kbd {
 }
 
 .line__acts button {
-  color: inherit;
-  white-space: nowrap;
-  transition: color 0.14s ease;
+  inline-size: 30px;
+  block-size: 30px;
+  color: var(--ink-faint);
 }
 
 .line__acts button:hover {
+  background: var(--veil-high);
   color: var(--ink);
 }
 
 .line__acts .line__undo:hover {
-  color: hsl(6 62% 64%);
+  color: var(--grave);
 }
 
 .typing {
@@ -1057,12 +1074,79 @@ kbd {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  inline-size: 28px;
-  block-size: 28px;
+  inline-size: 30px;
+  block-size: 30px;
   border-radius: 50%;
-  border: 1px solid currentcolor;
-  font-size: 0.8125rem;
-  opacity: 0.7;
+  background: rgb(128 128 150 / 16%);
+  color: var(--ink-soft);
+}
+
+/* --------------------------------------------------------------- voice */
+
+.voice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-inline-size: min(15rem, 52vw);
+  padding-block: 2px;
+}
+
+.voice__go {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  transition: filter 0.18s ease;
+}
+
+.voice__go:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.voice__go:disabled {
+  opacity: 0.5;
+}
+
+/* The shape travels with the message, so it is drawn before a byte arrives. */
+.voice__wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-inline-size: 0;
+  block-size: 32px;
+  cursor: pointer;
+}
+
+.voice__wave span {
+  flex: 1;
+  min-inline-size: 3px;
+  max-inline-size: 4px;
+  block-size: max(3px, var(--h, 30%));
+  border-radius: 2px;
+  background: currentcolor;
+  opacity: 0.32;
+  transition: opacity 0.12s ease;
+}
+
+.voice__wave span[data-played] {
+  opacity: 1;
+}
+
+.voice__time {
+  flex: 0 0 auto;
+  font-size: var(--text-label);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+}
+
+.voice__lost {
+  font-size: var(--text-label);
+  color: var(--grave);
 }
 
 .carried__about {
@@ -1165,6 +1249,8 @@ kbd {
 }
 
 .composer__reply-mark {
+  display: grid;
+  place-items: center;
   color: var(--accent);
 }
 
@@ -1177,16 +1263,21 @@ kbd {
 }
 
 .composer__reply-drop {
+  display: grid;
+  place-items: center;
   color: var(--ink-faint);
-  font-size: 1.0625rem;
-  line-height: 1;
+  transition: color 0.16s ease;
+}
+
+.composer__reply-drop:hover {
+  color: var(--ink);
 }
 
 .composer__line {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
-  padding: 7px 8px 7px 14px;
+  gap: 4px;
+  padding: 5px 6px;
   border: 1px solid var(--hair);
   border-radius: var(--radius-bubble);
   background: var(--veil);
@@ -1202,21 +1293,10 @@ kbd {
 }
 
 .composer__clip,
-.composer__send {
-  align-self: center;
-  flex: 0 0 auto;
-  font-size: var(--text-meta);
-  transition:
-    color 0.16s ease,
-    filter 0.18s ease;
-}
-
-.composer__clip {
-  color: var(--ink-faint);
-}
-
-.composer__clip:hover:not(:disabled) {
-  color: var(--ink);
+.composer__mic,
+.composer__send,
+.composer__drop {
+  align-self: flex-end;
 }
 
 .composer__clip:disabled {
@@ -1228,7 +1308,8 @@ kbd {
   flex: 1;
   min-inline-size: 0;
   max-block-size: 168px;
-  padding-block: 6px;
+  padding-block: 8px;
+  padding-inline: 4px;
   outline: none;
   overflow-y: auto;
   line-height: 1.45;
@@ -1240,15 +1321,64 @@ kbd {
 }
 
 .composer__send {
-  padding: 6px 14px;
-  border-radius: var(--radius);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 50%;
   background: var(--accent);
   color: var(--accent-ink);
-  font-weight: 600;
+  transition: filter 0.18s ease;
+}
+
+.composer__send:hover:not(:disabled) {
+  filter: brightness(1.1);
 }
 
 .composer__send:disabled {
   cursor: default;
+}
+
+/* --------------------------------------------------- recording a voice note */
+
+.composer__line--taping {
+  align-items: center;
+}
+
+.composer__taping {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-inline-size: 0;
+  padding-inline: 4px;
+}
+
+.composer__pulse {
+  inline-size: 8px;
+  block-size: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--grave);
+  animation: waking 1.4s ease-in-out infinite;
+}
+
+.composer__held {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.875rem;
+}
+
+.composer__hint {
+  font-size: var(--text-meta);
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__drop:hover {
+  color: var(--grave);
 }
 
 .composer[data-hovering] .composer__line {
@@ -1427,6 +1557,108 @@ kbd {
   text-align: center;
   font-size: 0.8125rem;
   color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------------- call */
+
+.call {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  gap: 24px;
+  padding: max(8vh, 48px) var(--gutter) max(env(safe-area-inset-bottom), 56px);
+  background: color-mix(in srgb, var(--bg) 96%, transparent);
+  backdrop-filter: blur(16px) saturate(130%);
+  animation: settle 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.call__who {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 14px;
+  text-align: center;
+}
+
+/* Someone is ringing: the avatar breathes so the screen is not just a still. */
+.call[data-state='incoming'] .avatar,
+.call[data-state='ringing'] .avatar {
+  animation: ringing 1.9s ease-in-out infinite;
+}
+
+@keyframes ringing {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--accent-soft);
+  }
+  50% {
+    box-shadow: 0 0 0 18px transparent;
+  }
+}
+
+.call__name {
+  font-size: 1.375rem;
+  font-weight: 500;
+}
+
+.call__state {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.call__muted {
+  font-size: var(--text-meta);
+  color: var(--grave);
+}
+
+.call__acts {
+  display: flex;
+  align-items: center;
+  gap: 52px;
+}
+
+.call__take,
+.call__refuse,
+.call__mute {
+  display: grid;
+  place-items: center;
+  inline-size: 62px;
+  block-size: 62px;
+  border-radius: 50%;
+  transition:
+    filter 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.call__take {
+  background: var(--live);
+  color: var(--bg);
+}
+
+.call__refuse {
+  background: var(--grave);
+  color: #fff;
+}
+
+.call__mute {
+  inline-size: 52px;
+  block-size: 52px;
+  background: var(--veil-high);
+  color: var(--ink);
+}
+
+.call__take:hover,
+.call__refuse:hover {
+  filter: brightness(1.08);
+}
+
+.call[data-state='ended'] .call__who {
+  opacity: 0.6;
+  transition: opacity 0.4s ease;
 }
 
 /* ----------------------------------------------------------------- notice */

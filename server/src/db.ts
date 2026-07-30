@@ -88,6 +88,9 @@ db.exec(`
     size        INTEGER NOT NULL,
     width       INTEGER,
     height      INTEGER,
+    -- Set for a voice message: how long it runs, and the shape to draw.
+    duration    REAL,
+    peaks       TEXT,
     created_at  INTEGER NOT NULL
   );
 
@@ -128,6 +131,8 @@ ensureColumn('conversations', 'created_by', 'TEXT')
 ensureColumn('participants', 'joined_at', 'INTEGER NOT NULL DEFAULT 0')
 ensureColumn('messages', 'edited_at', 'INTEGER')
 ensureColumn('messages', 'deleted_at', 'INTEGER')
+ensureColumn('attachments', 'duration', 'REAL')
+ensureColumn('attachments', 'peaks', 'TEXT')
 
 /* ------------------------------------------------------------------ search */
 

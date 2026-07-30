@@ -4,6 +4,7 @@ import { useSpringHandle } from '../motion/hooks'
 import { rubberBand, useDrag } from '../motion/gesture'
 import { clock, exact } from '../lib/time'
 import { Carried } from './Carried'
+import { Icon } from '../ui/Icon'
 import type { Attachment, Message } from '../net/types'
 
 type Props = {
@@ -104,7 +105,7 @@ export function Bubble({
       }}
     >
       <span className="line__cue" aria-hidden="true">
-        ↩
+        <Icon name="reply" size={16} />
       </span>
 
       <div className="bubble">
@@ -151,19 +152,34 @@ export function Bubble({
             >
               {clock(message.createdAt)}
             </time>
-            {mine && <span className="bubble__seen" data-read={read || undefined} />}
+            {mine && !message.pending && (
+              <span className="bubble__seen" data-read={read || undefined}>
+                <Icon name={read ? 'checks' : 'check'} size={14} />
+              </span>
+            )}
           </span>
         )}
       </div>
 
       {!gone && (
         <div className="line__acts" data-open={held || undefined}>
-          <button onClick={() => onReply(message)}>répondre</button>
+          <button onClick={() => onReply(message)} aria-label="répondre" title="répondre">
+            <Icon name="reply" size={17} />
+          </button>
           {mine && !message.pending && (
             <>
-              <button onClick={() => onEdit(message)}>modifier</button>
-              <button className="line__undo" onClick={() => onRetract(message)}>
-                retirer
+              {message.body && (
+                <button onClick={() => onEdit(message)} aria-label="modifier" title="modifier">
+                  <Icon name="edit" size={17} />
+                </button>
+              )}
+              <button
+                className="line__undo"
+                onClick={() => onRetract(message)}
+                aria-label="retirer"
+                title="retirer"
+              >
+                <Icon name="trash" size={17} />
               </button>
             </>
           )}

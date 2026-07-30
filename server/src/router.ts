@@ -59,6 +59,7 @@ import {
   openAttachment,
   receive,
   servingHeaders,
+  tamePeaks,
   TooLarge,
 } from './files.js'
 
@@ -646,11 +647,14 @@ async function carryFile(
       throw new HttpError(413, `un fichier fait au plus ${Math.floor(MAX_BYTES / 1048576)} Mo`)
     }
     try {
+      const seconds = Number(req.headers['x-file-duration'] ?? '')
       const attachment = await receive(req, user.id, {
         name: decodeURIComponent(String(req.headers['x-file-name'] ?? 'fichier')),
         mime: String(req.headers['content-type'] ?? 'application/octet-stream').split(';')[0] ?? '',
         width: numeric(req.headers['x-file-width'] as string | undefined),
         height: numeric(req.headers['x-file-height'] as string | undefined),
+        duration: Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 3600) : null,
+        peaks: tamePeaks(req.headers['x-file-peaks'] as string | undefined),
       })
       count('files.received')
       json(res, 200, { attachment })

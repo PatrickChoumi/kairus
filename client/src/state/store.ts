@@ -3,7 +3,8 @@ import { api, ApiError, getToken, setToken } from '../net/api'
 import { connection, type Link } from '../net/socket'
 import { disablePush, enablePush, pushState, type PushState } from '../net/push'
 import { forgetAttachment, forgetAttachments } from '../net/blobs'
-import { prepare, upload, UploadError } from '../net/files'
+import { caller, canCall, type CallSnapshot } from '../net/call'
+import { prepare, upload, UploadError, type Prepared } from '../net/files'
 import type { Conversation, Message, User } from '../net/types'
 
 export type Theme = 'dark' | 'light'
@@ -28,6 +29,8 @@ type State = {
   blocked: User[]
   /** Whether this browser will be reached when the application is closed. */
   push: PushState
+  /** The call in progress, from either end. */
+  call: CallSnapshot | null
 
   theme: Theme
   reading: boolean
@@ -54,8 +57,11 @@ type Actions = {
   renameGroup: (conversationId: string, title: string) => Promise<void>
 
   say: (body: string) => void
-  /** Sends one or more files, each as its own message. */
-  attach: (files: File[], caption?: string) => Promise<void>
+  /**
+   * Sends one or more files, each as its own message. A voice message arrives
+   * here already prepared — it was recorded, not chosen.
+   */
+  attach: (files: (File | Prepared)[], caption?: string) => Promise<void>
   reply: (message: Message | null) => void
   edit: (message: Message | null) => void
   revise: (body: string) => void
@@ -65,6 +71,11 @@ type Actions = {
 
   refreshPush: () => Promise<void>
   togglePush: () => Promise<void>
+
+  ringUp: (conversationId: string) => void
+  answerCall: () => void
+  hangUp: () => void
+  toggleMute: () => void
 
   block: (handle: string) => Promise<void>
   unblock: (handle: string) => Promise<void>
@@ -104,10 +115,17 @@ function announce(message: Message, conversations: Conversation[]): void {
   const speaker = conversation?.members.find((m) => m.id === message.senderId)
   // In a group the title is the notification; who spoke belongs in the body.
   const from = conversation?.face.name ?? 'Kairus'
-  const said =
-    conversation?.kind === 'group' && speaker
-      ? `${speaker.name} : ${message.body}`
-      : message.body
+  const mime = message.attachment?.mime ?? ''
+  const words =
+    message.body ||
+    (mime.startsWith('audio/')
+      ? 'message vocal'
+      : mime.startsWith('image/')
+        ? 'photo'
+        : mime
+          ? 'fichier'
+          : '')
+  const said = conversation?.kind === 'group' && speaker ? `${speaker.name} : ${words}` : words
   try {
     new Notification(from, {
       body: said.slice(0, 180),
@@ -202,13 +220,21 @@ export const useStore = create<State & Actions>((set, get) => {
   }
 
   const listen = () => {
-    connection.onLink((link) => set({ link }))
+    caller.onChange((call) => set({ call }))
+    connection.onLink((link) => {
+      // A call cannot survive the link it was negotiated over. Asked of the
+      // caller rather than the store: this runs once while the store is still
+      // being built, and `get()` is not answerable that early.
+      if (link === 'offline' && caller.current) caller.dropped()
+      set({ link })
+    })
     connection.on((event) => {
       switch (event.t) {
         case 'ready':
           // The server swaps an ageing token here; keeping the old one would
           // mean signing in again the moment it expires.
           if (event.token) setToken(event.token)
+          caller.useIceServers(event.ice)
           set({
             me: event.user,
             status: 'in',
@@ -276,6 +302,10 @@ export const useStore = create<State & Actions>((set, get) => {
           set((s) => ({ online: { ...s.online, [event.userId]: event.online } }))
           break
 
+        case 'call':
+          void caller.receive(event)
+          break
+
         case 'error':
           set({ notice: event.message })
           // A revoked or expired token: there is nothing to reconnect with.
@@ -322,6 +352,7 @@ export const useStore = create<State & Actions>((set, get) => {
     online: {},
     blocked: [],
     push: 'off',
+    call: null,
     theme: storedTheme(),
     reading: false,
     cursor: false,
@@ -379,6 +410,34 @@ export const useStore = create<State & Actions>((set, get) => {
       } catch (error) {
         set({ notice: error instanceof ApiError ? error.message : 'impossible pour l’instant' })
       }
+    },
+
+    /** Calls are one to one: a group has no single person to ring. */
+    ringUp(conversationId) {
+      const conversation = get().conversations.find((c) => c.id === conversationId)
+      const peer = conversation?.members[0]
+      if (!conversation || conversation.kind !== 'direct' || !peer) return
+      if (!canCall()) {
+        set({ notice: 'ce navigateur ne sait pas passer d’appel' })
+        return
+      }
+      if (!get().online[peer.id]) {
+        set({ notice: `${peer.name} n’est pas connecté` })
+        return
+      }
+      void caller.place(conversationId, peer.id)
+    },
+
+    answerCall() {
+      void caller.accept()
+    },
+
+    hangUp() {
+      caller.hangUp()
+    },
+
+    toggleMute() {
+      caller.toggleMute()
     },
 
     async block(handle) {
@@ -445,6 +504,7 @@ export const useStore = create<State & Actions>((set, get) => {
     },
 
     signOut() {
+      caller.hangUp()
       connection.close()
       forgetAttachments()
       setToken(null)
@@ -569,8 +629,10 @@ export const useStore = create<State & Actions>((set, get) => {
         const nonce = `pending:${crypto.randomUUID()}`
         let preview: string | undefined
         try {
-          const prepared = await prepare(file)
-          if (prepared.type.startsWith('image/')) preview = URL.createObjectURL(prepared.blob)
+          const prepared = file instanceof File ? await prepare(file) : file
+          if (/^(image|audio)\//.test(prepared.type)) {
+            preview = URL.createObjectURL(prepared.blob)
+          }
 
           absorb({
             id: nonce,
@@ -589,6 +651,8 @@ export const useStore = create<State & Actions>((set, get) => {
               size: prepared.blob.size,
               width: prepared.width,
               height: prepared.height,
+              duration: prepared.duration ?? null,
+              peaks: prepared.peaks?.join(',') ?? null,
             },
             pending: true,
             progress: 0,

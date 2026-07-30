@@ -27,7 +27,23 @@ export const MAX_BYTES = Number(process.env.MAX_UPLOAD_BYTES ?? 8 * 1024 * 1024)
 /** Types safe to render in place. Note what is missing: SVG carries scripts. */
 const INLINE = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif'])
 
+/**
+ * Sound is served with its real type so `<audio>` can play it without a
+ * download. An audio decoder is not a script host: none of these can carry
+ * markup the browser would run with this origin's privileges.
+ */
+const AUDIBLE = new Set([
+  'audio/webm',
+  'audio/ogg',
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/aac',
+  'audio/wav',
+  'audio/x-wav',
+])
+
 export const isDisplayable = (mime: string): boolean => INLINE.has(mime)
+export const isAudible = (mime: string): boolean => AUDIBLE.has(mime)
 
 /**
  * Where the bytes live. Always a real directory — an in-memory database is
@@ -50,6 +66,10 @@ export type Attachment = {
   size: number
   width: number | null
   height: number | null
+  /** Seconds, for a voice message. */
+  duration: number | null
+  /** 0…100 loudness samples, comma-separated — the shape of the waveform. */
+  peaks: string | null
 }
 
 type AttachmentRow = Attachment & { uploader_id: string; message_id: string | null }
@@ -61,7 +81,21 @@ const toAttachment = (r: AttachmentRow): Attachment => ({
   size: r.size,
   width: r.width,
   height: r.height,
+  duration: r.duration,
+  peaks: r.peaks,
 })
+
+/** At most 64 small integers. Anything else is not a waveform we drew. */
+export function tamePeaks(raw: string | undefined): string | null {
+  if (!raw) return null
+  const values = raw
+    .split(',')
+    .slice(0, 64)
+    .map((part) => Number(part.trim()))
+    .filter((n) => Number.isFinite(n))
+    .map((n) => Math.max(0, Math.min(100, Math.round(n))))
+  return values.length > 0 ? values.join(',') : null
+}
 
 /** Keeps a filename printable without letting it name a path. */
 export function tameName(raw: string): string {
@@ -83,7 +117,14 @@ export class TooLarge extends Error {}
 export async function receive(
   req: IncomingMessage,
   uploaderId: string,
-  meta: { name: string; mime: string; width: number | null; height: number | null },
+  meta: {
+    name: string
+    mime: string
+    width: number | null
+    height: number | null
+    duration?: number | null
+    peaks?: string | null
+  },
 ): Promise<Attachment> {
   const id = randomUUID()
   const target = pathOf(id)
@@ -118,10 +159,14 @@ export async function receive(
     size: written,
     width: meta.width,
     height: meta.height,
+    duration: meta.duration ?? null,
+    peaks: meta.peaks ?? null,
   }
   db.prepare(
-    `INSERT INTO attachments (id, uploader_id, message_id, name, mime, size, width, height, created_at)
-     VALUES (@id, @uploader_id, @message_id, @name, @mime, @size, @width, @height, ?)`,
+    `INSERT INTO attachments
+       (id, uploader_id, message_id, name, mime, size, width, height, duration, peaks, created_at)
+     VALUES
+       (@id, @uploader_id, @message_id, @name, @mime, @size, @width, @height, @duration, @peaks, ?)`,
   ).run({ ...row }, Date.now())
 
   return toAttachment(row)
@@ -203,8 +248,10 @@ export function startFileSweeper(): () => void {
  * as an opaque download — an HTML or SVG file rendered in place would run with
  * this origin's privileges.
  */
-export function servingHeaders(attachment: Attachment): Record<string, string> {
-  const inline = isDisplayable(attachment.mime)
+export function servingHeaders(
+  attachment: Pick<Attachment, 'name' | 'mime' | 'size'>,
+): Record<string, string> {
+  const inline = isDisplayable(attachment.mime) || isAudible(attachment.mime)
   const filename = attachment.name.replace(/[^\w.\- ]/g, '_')
   return {
     'content-type': inline ? attachment.mime : 'application/octet-stream',

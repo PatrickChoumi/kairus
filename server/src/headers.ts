@@ -50,6 +50,8 @@ export function buildPolicy(scriptHashes: string[]): string {
     `form-action 'self'`,
     // Attachments are fetched with the session and shown as object URLs.
     `img-src 'self' data: blob:`,
+    // A voice message is played from the same kind of object URL.
+    `media-src 'self' blob:`,
     `font-src 'self'`,
     `style-src 'self'`,
     `script-src 'self' ${scriptHashes.join(' ')}`.trim(),
@@ -83,7 +85,9 @@ export function applySecurityHeaders(req: IncomingMessage, res: ServerResponse):
   res.setHeader('x-content-type-options', 'nosniff')
   res.setHeader('x-frame-options', 'DENY')
   res.setHeader('referrer-policy', 'no-referrer')
-  res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=()')
+  // The microphone is opened by this origin alone, for voice messages and
+  // calls. Everything else stays refused, including to ourselves.
+  res.setHeader('permissions-policy', 'camera=(), microphone=(self), geolocation=(), payment=()')
   res.setHeader('cross-origin-opener-policy', 'same-origin')
   res.setHeader('cross-origin-resource-policy', 'same-origin')
   // Promising HTTPS over a plain connection would lock out a local dev server.

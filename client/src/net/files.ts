@@ -24,7 +24,13 @@ export type Prepared = {
   type: string
   width: number | null
   height: number | null
+  /** Seconds, for a voice message. */
+  duration?: number
+  /** 0…100 loudness samples: the shape to draw. */
+  peaks?: number[]
 }
+
+export const isVoice = (type: string): boolean => type.startsWith('audio/')
 
 const readImage = (file: Blob): Promise<HTMLImageElement | null> =>
   new Promise((resolve) => {
@@ -100,6 +106,8 @@ export async function upload(
     request.setRequestHeader('x-file-name', encodeURIComponent(prepared.name))
     if (prepared.width) request.setRequestHeader('x-file-width', String(prepared.width))
     if (prepared.height) request.setRequestHeader('x-file-height', String(prepared.height))
+    if (prepared.duration) request.setRequestHeader('x-file-duration', prepared.duration.toFixed(2))
+    if (prepared.peaks?.length) request.setRequestHeader('x-file-peaks', prepared.peaks.join(','))
     if (token) request.setRequestHeader('authorization', `Bearer ${token}`)
 
     request.upload.onprogress = (event) => {

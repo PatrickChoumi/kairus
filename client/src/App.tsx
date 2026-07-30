@@ -3,6 +3,7 @@ import { useStore } from './state/store'
 import { Threshold } from './views/Threshold'
 import { Stage } from './views/Stage'
 import { Keepsake } from './views/Keepsake'
+import { Call } from './views/Call'
 import { Notice } from './ui/Notice'
 
 export function App() {
@@ -47,6 +48,7 @@ export function App() {
       {status === 'out' && <Threshold />}
       {/* A phrase that will never be shown again comes before everything else. */}
       {status === 'in' && (keepsake ? <Keepsake /> : <Stage />)}
+      {status === 'in' && <Call />}
       <Notice />
     </>
   )

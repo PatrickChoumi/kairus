@@ -1,5 +1,6 @@
 import type { IncomingMessage, Server } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'
+import { env } from './env.js'
 import { limits } from './limiter.js'
 import {
   addMessage,
@@ -24,7 +25,14 @@ import { attachmentOf, claim } from './files.js'
 import { count, gauge, log } from './log.js'
 
 type Outbound =
-  | { t: 'ready'; user: User; conversations: ReturnType<typeof listConversations>; token?: string }
+  | {
+      t: 'ready'
+      user: User
+      conversations: ReturnType<typeof listConversations>
+      token?: string
+      /** What a call should use to find a path between two browsers. */
+      ice: unknown[]
+    }
   | { t: 'message'; message: Message; nonce?: string }
   | { t: 'revised'; message: Message }
   | { t: 'typing'; conversation: string; userId: string }
@@ -33,7 +41,38 @@ type Outbound =
   | { t: 'conversation'; conversation: NonNullable<ReturnType<typeof describeConversation>> }
   /** A conversation that is no longer yours: you left it, or it dissolved. */
   | { t: 'gone'; conversation: string }
+  /** One end of a call talking to the other. The server only carries it. */
+  | {
+      t: 'call'
+      act: CallAct
+      conversation: string
+      call: string
+      from: string
+      payload?: unknown
+    }
   | { t: 'error'; message: string; retryAfter?: number; code?: 'expired' }
+
+/**
+ * What one end of a call can say to the other.
+ *
+ * `ring` opens it, `accept` and `decline` answer it, `end` closes it from
+ * either side, and `busy` is the answer when the callee is already on a call.
+ * `offer`, `answer` and `ice` carry the WebRTC negotiation itself, which the
+ * server never reads — it only knows who may hear it.
+ */
+const CALL_ACTS = ['ring', 'accept', 'decline', 'busy', 'end', 'offer', 'answer', 'ice'] as const
+type CallAct = (typeof CALL_ACTS)[number]
+
+const isCallAct = (value: unknown): value is CallAct =>
+  typeof value === 'string' && (CALL_ACTS as readonly string[]).includes(value)
+
+/** What a message with no words is, in the one line a notification has. */
+function wordless(mime: string | undefined): string {
+  if (!mime) return ''
+  if (mime.startsWith('audio/')) return 'message vocal'
+  if (mime.startsWith('image/')) return 'photo'
+  return 'fichier'
+}
 
 type Socket = WebSocket & {
   userId?: string
@@ -96,6 +135,19 @@ class Hub {
     for (const userId of participantIds(conversationId)) this.toUser(userId, payload, skip)
   }
 
+  /**
+   * Whether anyone else in the conversation could pick up. Ringing a browser
+   * that is not there would leave the caller listening to nothing until they
+   * gave up; telling them straight away is kinder and cheaper.
+   */
+  hasPeerOnline(conversationId: string, exceptUserId: string): boolean {
+    for (const userId of participantIds(conversationId)) {
+      if (userId === exceptUserId || isBlocked(exceptUserId, userId)) continue
+      if (this.isOnline(userId)) return true
+    }
+    return false
+  }
+
   /** Everyone in the conversation except one person — used for typing. */
   toPeers(conversationId: string, exceptUserId: string, payload: Outbound): void {
     for (const userId of participantIds(conversationId)) {
@@ -122,7 +174,7 @@ class Hub {
     for (const userId of participantIds(message.conversationId)) {
       if (userId === message.senderId || this.isOnline(userId)) continue
       if (isBlocked(userId, message.senderId)) continue
-      const said = message.body || (message.attachment ? 'a envoyé un fichier' : '')
+      const said = message.body || wordless(message.attachment?.mime)
       try {
         // In a group the title is the notification; who spoke goes in the body.
         const conversation = room ? describeConversation(message.conversationId, userId) : null
@@ -319,6 +371,7 @@ function handleFrame(socket: Socket, frame: Record<string, unknown>): void {
       t: 'ready',
       user,
       conversations: listConversations(user.id),
+      ice: env.iceServers,
       // An old-but-valid token is swapped here too, not only over HTTP.
       ...(shouldRenew(claims) ? { token: sign(user.id, claims.version) } : {}),
     })
@@ -390,6 +443,45 @@ function handleFrame(socket: Socket, frame: Record<string, unknown>): void {
       if (!conversation) return
       const at = markRead(conversation, userId, Date.now())
       hub.broadcastRead(conversation, userId, at)
+      break
+    }
+    /*
+     * Calls.
+     *
+     * The audio never comes through here: two browsers negotiate a direct
+     * path and the server only carries the notes they pass each other. It
+     * still decides who may hear them — a call is a conversation like any
+     * other, so the same participation and blocking rules apply.
+     */
+    case 'call': {
+      const act = frame.act
+      const call = str(frame, 'call')
+      if (!conversation || !call || !isCallAct(act)) return
+      if (conversationKind(conversation) !== 'direct') {
+        send(socket, { t: 'error', message: 'les appels de groupe ne sont pas encore là' })
+        return
+      }
+      if (blockedInConversation(conversation, userId)) {
+        send(socket, { t: 'error', message: 'cette conversation est fermée' })
+        return
+      }
+      // Only the ring is rationed; what follows belongs to a call already rung.
+      if (act === 'ring' && !afford(socket, limits.ring, userId, 'trop d’appels d’affilée')) return
+      if (act === 'ring') {
+        count('calls_placed')
+        if (!hub.hasPeerOnline(conversation, userId)) {
+          send(socket, { t: 'call', act: 'end', conversation, call, from: userId })
+          return
+        }
+      }
+      hub.toPeers(conversation, userId, {
+        t: 'call',
+        act,
+        conversation,
+        call,
+        from: userId,
+        payload: frame.payload,
+      })
       break
     }
     case 'ping':

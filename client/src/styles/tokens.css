@@ -3,34 +3,42 @@
  *
  * The layout is the one everybody already knows — bubbles, a list of
  * conversations, an avatar and a name. What sets this apart is restraint:
- * fewer surfaces, fewer borders, one accent, and a lot of air. The identity
- * lives in the palette and the typography, not in a new grammar people would
- * have to learn.
+ * fewer surfaces, fewer borders, one accent, and a lot of air.
+ *
+ * The dark palette is Tokyo Night: a deep indigo rather than a black, with
+ * text that stops short of white. It is a low-contrast scheme by design —
+ * comfortable to sit in for a long time, which is what a messenger is for.
+ * The light one is its daytime counterpart, same hues, inverted.
  */
 
 :root {
   color-scheme: dark;
 
-  --bg: #0d0d0f;
-  --veil: #17171b;
-  --veil-high: #212127;
-  --ink: #ecedf1;
-  --ink-soft: #9b9ca6;
-  --ink-faint: #62636e;
-  --hair: rgb(255 255 255 / 8%);
-  --hair-strong: rgb(255 255 255 / 15%);
+  --bg: #1a1b26;
+  --veil: #1f2335;
+  --veil-high: #292e42;
+  --ink: #c0caf5;
+  --ink-soft: #9aa5ce;
+  --ink-faint: #565f89;
+  --hair: rgb(192 202 245 / 9%);
+  --hair-strong: rgb(192 202 245 / 17%);
 
-  /* A warm gold, used sparingly: what is unread, what has focus, and send. */
-  --accent: #c8a24a;
-  --accent-ink: #191408;
-  --accent-soft: rgb(200 162 74 / 14%);
+  /* One blue, used sparingly: what is unread, what has focus, and send. */
+  --accent: #7aa2f7;
+  --accent-ink: #161620;
+  --accent-soft: rgb(122 162 247 / 15%);
 
-  /* What your own messages sit on: a warm surface, not a shout of colour. */
-  --mine: #2d2a22;
-  --mine-ink: #f2efe7;
+  /* Someone is there. Green everywhere else, so green here. */
+  --live: #9ece6a;
+  /* Taking something back, hanging up, refusing. */
+  --grave: #f7768e;
 
-  --shadow-lift: 0 1px 2px rgb(0 0 0 / 32%), 0 12px 38px -14px rgb(0 0 0 / 60%);
-  --shadow-float: 0 24px 68px -22px rgb(0 0 0 / 76%);
+  /* What your own messages sit on: the accent, dimmed until it is a surface. */
+  --mine: #2f3c60;
+  --mine-ink: #d6dffb;
+
+  --shadow-lift: 0 1px 2px rgb(8 8 14 / 40%), 0 12px 38px -14px rgb(8 8 14 / 70%);
+  --shadow-float: 0 24px 68px -22px rgb(8 8 14 / 80%);
 
   --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Inter,
     'Helvetica Neue', Arial, sans-serif;
@@ -53,22 +61,25 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --bg: #faf9f7;
-  --veil: #ffffff;
-  --veil-high: #f0eeea;
-  --ink: #191819;
-  --ink-soft: #5e5c60;
-  --ink-faint: #918f95;
-  --hair: rgb(20 18 20 / 10%);
-  --hair-strong: rgb(20 18 20 / 18%);
+  --bg: #e9eaf1;
+  --veil: #fbfbfe;
+  --veil-high: #dcdff0;
+  --ink: #2c3054;
+  --ink-soft: #575d85;
+  --ink-faint: #8189b3;
+  --hair: rgb(44 48 84 / 11%);
+  --hair-strong: rgb(44 48 84 / 20%);
 
-  --accent: #8a6a1c;
-  --accent-ink: #fffdf6;
-  --accent-soft: rgb(138 106 28 / 12%);
+  --accent: #3a6fd8;
+  --accent-ink: #fbfbfe;
+  --accent-soft: rgb(58 111 216 / 13%);
 
-  --mine: #ebe7dd;
-  --mine-ink: #191819;
+  --live: #587539;
+  --grave: #c94f65;
 
-  --shadow-lift: 0 1px 2px rgb(20 18 20 / 6%), 0 12px 30px -16px rgb(20 18 20 / 22%);
-  --shadow-float: 0 24px 60px -24px rgb(20 18 20 / 30%);
+  --mine: #d3e0fb;
+  --mine-ink: #21274a;
+
+  --shadow-lift: 0 1px 2px rgb(44 48 84 / 7%), 0 12px 30px -16px rgb(44 48 84 / 26%);
+  --shadow-float: 0 24px 60px -24px rgb(44 48 84 / 32%);
 }

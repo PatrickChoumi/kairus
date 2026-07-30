@@ -1,8 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../state/store'
 import { Sigil } from '../ui/Sigil'
+import { Icon } from '../ui/Icon'
 import { stamp } from '../lib/time'
 import type { Conversation } from '../net/types'
+
+/** What a message with no words is, in the one line the list has for it. */
+function summarise(message: NonNullable<Conversation['lastMessage']>): string {
+  if (message.body) return message.body
+  const mime = message.attachment?.mime ?? ''
+  if (mime.startsWith('audio/')) return 'message vocal'
+  if (mime.startsWith('image/')) return 'photo'
+  return message.attachment ? 'fichier' : ''
+}
 
 type Props = {
   /** Hands the row's mark to the stage so it can carry it into the thread. */
@@ -71,10 +81,30 @@ export function Rail({ onOpen, dimmed }: Props) {
         </div>
 
         <nav className="rail__acts">
-          <button onClick={() => setCursor(true, '@')}>écrire à</button>
-          <button onClick={() => setCursor(true, 'réunir un groupe')}>groupe</button>
-          <button onClick={() => setCursor(true)}>chercher</button>
-          <button onClick={() => setCursor(true, 'réglages')}>réglages</button>
+          <button onClick={() => setCursor(true)} aria-label="chercher" title="chercher">
+            <Icon name="search" />
+          </button>
+          <button
+            onClick={() => setCursor(true, '@')}
+            aria-label="écrire à quelqu’un"
+            title="écrire à quelqu’un"
+          >
+            <Icon name="compose" />
+          </button>
+          <button
+            onClick={() => setCursor(true, 'réunir un groupe')}
+            aria-label="réunir un groupe"
+            title="réunir un groupe"
+          >
+            <Icon name="group" />
+          </button>
+          <button
+            onClick={() => setCursor(true, 'réglages')}
+            aria-label="réglages"
+            title="réglages"
+          >
+            <Icon name="settings" />
+          </button>
         </nav>
       </header>
 
@@ -85,8 +115,12 @@ export function Rail({ onOpen, dimmed }: Props) {
             Écrivez à quelqu’un par son nom d’usage, ou réunissez un groupe.
           </p>
           <div className="rail__void-acts">
-            <button onClick={() => setCursor(true, '@')}>écrire à quelqu’un</button>
-            <button onClick={() => setCursor(true, 'réunir un groupe')}>réunir un groupe</button>
+            <button onClick={() => setCursor(true, '@')}>
+              <Icon name="compose" size={16} /> écrire à quelqu’un
+            </button>
+            <button onClick={() => setCursor(true, 'réunir un groupe')}>
+              <Icon name="group" size={16} /> réunir un groupe
+            </button>
           </div>
         </div>
       ) : (
@@ -131,7 +165,7 @@ export function Rail({ onOpen, dimmed }: Props) {
                         ) : last ? (
                           <>
                             {mine && <span className="row__you">vous : </span>}
-                            {last.body || (last.attachment ? 'a envoyé un fichier' : '')}
+                            {summarise(last)}
                           </>
                         ) : (
                           <span className="row__empty">rien encore</span>

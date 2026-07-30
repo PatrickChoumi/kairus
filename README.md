@@ -17,11 +17,10 @@ liste à gauche, la conversation à droite ; un seul volet à la fois sur un
 téléphone, avec la flèche de retour et le balayage attendus. Vos messages à
 droite, ceux d'en face à gauche. Aucune de ces décisions n'est à découvrir.
 
-**Moins de surfaces.** Pas d'écran de réglages, pas de barre d'outils, pas de
-rangée d'icônes : quatre actions nommées en toutes lettres au-dessus de la
-liste, deux dans l'en-tête d'un fil. L'heure et l'accusé de lecture
-n'apparaissent qu'en fin de prise de parole. Le filet sous l'en-tête n'existe
-que s'il y a quelque chose de défilé en dessous.
+**Moins de surfaces.** Pas d'écran de réglages, pas de barre d'outils : quatre
+icônes au-dessus de la liste, trois dans l'en-tête d'un fil, et c'est tout.
+L'heure et l'accusé de lecture n'apparaissent qu'en fin de prise de parole. Le
+filet sous l'en-tête n'existe que s'il y a quelque chose de défilé en dessous.
 
 **Le Curseur.** `⌘K` (ou `Ctrl+K`) ouvre le point de commande de
 l'application — le même que les boutons visibles ouvrent en le pointant déjà
@@ -38,18 +37,19 @@ repart de sa position et de sa vitesse réelles au lieu de sauter. Quand vous
 ouvrez un fil, l'avatar quitte sa ligne dans la liste et se pose sur
 l'en-tête — un même objet qui se déplace, pas deux copies.
 
-**Des gestes en plus des boutons.** Ce qu'on peut faire à un message est écrit
-en toutes lettres à côté de lui, au survol ou après un appui long : répondre,
-et, si c'est le vôtre, modifier ou retirer. Les gestes sont un raccourci, pas
-la seule voie : tirer un message vers le centre y répond, tirer le fil vers la
-droite le referme, double-cliquer répond aussi, `↑` dans un champ vide rouvre
-votre dernier message pour le corriger.
+**Des gestes en plus des boutons.** Ce qu'on peut faire à un message apparaît à
+côté de lui, au survol ou après un appui long : répondre, et, si c'est le
+vôtre, modifier ou retirer. Les gestes sont un raccourci, pas la seule voie :
+tirer un message vers le centre y répond, tirer le fil vers la droite le
+referme, double-cliquer répond aussi, `↑` dans un champ vide rouvre votre
+dernier message pour le corriger.
 
-**Une seule couleur.** Un or chaud, et rien d'autre : ce qui n'est pas lu, ce
-qui a le focus, et le bouton d'envoi. Vos propres bulles sont une surface
-chaude, pas un aplat saturé. Pas de bleu, pas de vert — les couleurs des
-messageries que Kairus n'est pas. Thèmes clair et sombre, avec respect de
-`prefers-reduced-motion`.
+**Tokyo Night.** Le thème sombre n'est pas un noir mais un indigo profond, avec
+un texte qui s'arrête avant le blanc : un contraste volontairement bas, dans
+lequel on peut rester longtemps — ce qu'on demande à une messagerie. Un seul
+bleu porte l'accent (le non-lu, le focus, l'envoi), un vert dit la présence, un
+rose dit ce qui se retire ou raccroche. Le thème clair est le même jeu de
+teintes, inversé. `prefers-reduced-motion` est respecté.
 
 ---
 
@@ -68,6 +68,15 @@ messageries que Kairus n'est pas. Thèmes clair et sombre, avec respect de
   ou un simple collage. Les images sont réduites dans le navigateur avant de
   partir, s'affichent à leurs proportions dès l'apparition de la bulle, et
   s'ouvrent en pleine surface
+- **Messages vocaux** : un appui sur le micro, un compteur, et c'est parti. La
+  forme d'onde est calculée avant l'envoi et voyage avec le message : la bulle
+  a sa taille finale avant qu'un octet de son n'arrive, et un vocal qu'on
+  n'écoute pas ne coûte rien à afficher. On clique dans l'onde pour s'y déplacer
+- **Appels audio** : de navigateur à navigateur (WebRTC). Le serveur ne
+  transporte que les présentations, jamais la voix — il décide seulement qui a
+  le droit de sonner qui. Sonnerie, décrochage, micro coupé, durée, et une
+  raison écrite quand ça se termine mal. À deux seulement : un groupe n'a
+  personne en particulier à appeler
 - Réponses citées, avec saut vers le message cité
 - Indicateur de frappe, présence, accusés de lecture, compteurs de non-lus
 - Recherche dans l'historique sur un index FTS5 ; les personnes se trouvent par
@@ -176,9 +185,19 @@ volé dès qu'on change sa phrase secrète. Un cookie `httpOnly` resterait plus
 solide, mais imposerait une protection CSRF et compliquerait le déploiement
 multi-origine ; ce n'est pas fait.
 
+**Les appels.** La voix ne passe pas par le serveur : deux navigateurs
+négocient un chemin direct et se parlent. Le serveur ne relaie que les
+présentations, et il applique aux appels les mêmes règles qu'aux messages —
+seuls les participants d'une conversation peuvent se sonner, un blocage coupe
+la sonnerie dans les deux sens, et sonner en boucle est ralenti comme le reste.
+Le trajet direct n'est en revanche **pas chiffré de bout en bout au sens de
+Signal** : WebRTC chiffre le transport (DTLS-SRTP), ce qui protège du réseau,
+pas d'un serveur qui aurait été remplacé par un autre.
+
 **Ce qui n'existe toujours pas.** Pas de second facteur, et une phrase secrète
 n'a d'autre contrainte que huit caractères — pas de vérification contre les
-fuites connues. C'est en dessous de ce qu'on attend en 2026.
+fuites connues. C'est en dessous de ce qu'on attend en 2026. Les appels de
+groupe et la vidéo ne sont pas là non plus.
 
 ---
 
@@ -205,7 +224,7 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 141 tests : 97 côté serveur, 44 côté client
+npm test                   # 155 tests : 111 côté serveur, 44 côté client
 npm run typecheck          # serveur et client
 ```
 
@@ -215,8 +234,11 @@ ne réécrit pas les mots d'un autre —, recherche et sa robustesse, blocage,
 en-têtes de sécurité, sauvegardes, abonnements push et compteurs, pièces
 jointes — qui peut les lire, ce qui n'est jamais affiché en place, ce qui est
 balayé —, groupes — l'historique qui ne s'hérite pas, la marque de lecture qui
-attend le dernier, ce qu'un tiers ne peut pas faire —, et le WebSocket sous
-charge et à l'éviction.
+attend le dernier, ce qu'un tiers ne peut pas faire —, messages vocaux — la
+durée et la forme conservées, une forme d'onde forgée refusée, le son servi en
+place —, appels — la négociation relayée sans être lue, un inconnu qui ne peut
+pas faire sonner le téléphone d'autrui, le blocage qui tient dans les deux sens,
+le groupe qui refuse —, et le WebSocket sous charge et à l'éviction.
 
 **Client** (`vitest`, jsdom) : la souscription aux notifications, le lien temps
 réel et la réconciliation optimiste, c'est-à-dire les endroits où une messagerie

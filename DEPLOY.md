@@ -212,8 +212,33 @@ server {
 | `BACKUP_DIR`  | `/data/backups`               | Non défini : **aucune sauvegarde n'est prise**. C'est la différence entre un incident et une perte définitive.  |
 | `VAPID_*`     | la sortie de l'étape 1 bis    | Absentes : pas de notification hors application. Changées : tous les abonnements existants meurent.             |
 | `MAX_UPLOAD_BYTES` | `8388608` (8 Mo)         | Les pièces jointes vivent dans `<DATA_DIR>/files`, donc sur le volume. Dimensionnez-le en conséquence.          |
+| `ICE_SERVERS` | **laisser vide pour commencer** | Vide : un STUN public, qui suffit à la plupart des réseaux. Derrière un NAT symétrique — souvent en 4G ou en entreprise — l'appel sonne mais ne s'établit pas : il faut y mettre un TURN. Voir plus bas. |
 | `METRICS_TOKEN` | une chaîne aléatoire        | Non défini : `/api/metrics` répond 404. Ne le publiez pas — il expose vos compteurs de connexion.               |
 | `CORS_ORIGIN` | **laisser vide**              | Inutile ici : le client est servi par le même serveur. Ne le remplissez que pour un front hébergé ailleurs.     |
+
+### Les appels, et quand un STUN ne suffit plus
+
+La voix ne passe pas par votre serveur : les deux navigateurs se parlent
+directement. Pour trouver ce chemin ils ont besoin d'un serveur STUN, qui leur
+dit seulement sous quelle adresse publique ils apparaissent — c'est gratuit,
+c'est le défaut, et cela fonctionne pour la plupart des connexions
+domestiques.
+
+Ce qui ne fonctionne pas ainsi : les NAT dits **symétriques**, courants en 4G,
+en réseau d'entreprise et derrière certains opérateurs. Là, il faut un relais
+(**TURN**), qui fait transiter la voix — donc de la bande passante à payer, par
+minute et par appel. Kairus n'en fournit pas ; il sait en utiliser un :
+
+```bash
+ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.exemple.fr:3478","username":"kairus","credential":"…"}]'
+```
+
+Le symptôme est reconnaissable : ça sonne, l'autre décroche, et l'appel se
+termine tout seul en disant « aucun chemin entre les deux appareils ». Si vous
+voyez cela, c'est un TURN qu'il manque, pas un bug.
+
+Rien de tout cela n'est nécessaire pour les **messages vocaux** : ceux-là
+passent par le serveur comme n'importe quelle pièce jointe.
 
 ---
 

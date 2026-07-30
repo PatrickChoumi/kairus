@@ -26,8 +26,31 @@ function trustedHops(): number {
   return Number.isInteger(raw) && raw >= 0 ? raw : 0
 }
 
+/**
+ * What a call uses to find a path between two browsers.
+ *
+ * A STUN server is enough when at least one side is not behind a symmetric
+ * NAT; the rest need a relay (TURN), which we do not run and cannot fake.
+ * `ICE_SERVERS` takes a JSON array — exactly the shape `RTCPeerConnection`
+ * expects — so adding a TURN credential is a configuration change, not a
+ * deployment.
+ */
+function iceServers(): unknown[] {
+  const raw = process.env.ICE_SERVERS?.trim()
+  if (!raw) return [{ urls: 'stun:stun.l.google.com:19302' }]
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed
+    log.warn('ice.servers.ignored', { reason: 'not a JSON array' })
+  } catch (error) {
+    log.warn('ice.servers.ignored', { error: String(error) })
+  }
+  return [{ urls: 'stun:stun.l.google.com:19302' }]
+}
+
 export const env = {
   isProd,
+  iceServers: iceServers(),
   port: Number(process.env.PORT ?? 4000),
   host: process.env.HOST ?? '0.0.0.0',
   jwtSecret: requiredSecret(),

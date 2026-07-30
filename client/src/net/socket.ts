@@ -1,8 +1,9 @@
 import { socketUrl } from './api'
-import type { Inbound } from './types'
+import type { CallAct, Inbound } from './types'
 
 export type Outbound =
   | { t: 'hello'; token: string }
+  | { t: 'call'; act: CallAct; conversation: string; call: string; payload?: unknown }
   | {
       t: 'send'
       conversation: string
@@ -62,7 +63,9 @@ class Connection {
       return
     }
     // Transient signals are worthless once late; durable ones are kept.
-    if (frame.t === 'typing') return
+    // A call is the most transient of all: a ring delivered after the link
+    // came back would make someone else's phone go off for nothing.
+    if (frame.t === 'typing' || frame.t === 'call') return
     this.outbox.push(frame)
   }
 
