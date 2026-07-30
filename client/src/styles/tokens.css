@@ -1,31 +1,36 @@
 /*
  * Kairus design tokens.
  *
- * The palette is warm and almost monochrome: a near-black ground, an off-white
- * ink, and a single gold that marks one thing only — what you said yourself.
- * No blue, no violet, no rounded speech bubbles: those belong to every other
- * messenger, and borrowing them would say "copy" before a word is read.
+ * The layout is the one everybody already knows — bubbles, a list of
+ * conversations, an avatar and a name. What sets this apart is restraint:
+ * fewer surfaces, fewer borders, one accent, and a lot of air. The identity
+ * lives in the palette and the typography, not in a new grammar people would
+ * have to learn.
  */
 
 :root {
   color-scheme: dark;
 
-  --bg: #0a0a0c;
-  --veil: #121215;
-  --veil-high: #191920;
+  --bg: #0d0d0f;
+  --veil: #17171b;
+  --veil-high: #212127;
   --ink: #ecedf1;
-  --ink-soft: #9a9ba6;
-  --ink-faint: #5b5c68;
+  --ink-soft: #9b9ca6;
+  --ink-faint: #62636e;
   --hair: rgb(255 255 255 / 8%);
   --hair-strong: rgb(255 255 255 / 15%);
 
-  /* Gold, not blue. Used for your own voice and for focus, nothing else. */
+  /* A warm gold, used sparingly: what is unread, what has focus, and send. */
   --accent: #c8a24a;
-  --accent-ink: #17130a;
+  --accent-ink: #191408;
   --accent-soft: rgb(200 162 74 / 14%);
 
-  --shadow-lift: 0 1px 2px rgb(0 0 0 / 34%), 0 14px 44px -14px rgb(0 0 0 / 62%);
-  --shadow-float: 0 26px 74px -22px rgb(0 0 0 / 78%);
+  /* What your own messages sit on: a warm surface, not a shout of colour. */
+  --mine: #2d2a22;
+  --mine-ink: #f2efe7;
+
+  --shadow-lift: 0 1px 2px rgb(0 0 0 / 32%), 0 12px 38px -14px rgb(0 0 0 / 60%);
+  --shadow-float: 0 24px 68px -22px rgb(0 0 0 / 76%);
 
   --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Inter,
     'Helvetica Neue', Arial, sans-serif;
@@ -34,38 +39,36 @@
   --text: 0.9375rem;
   --text-meta: 0.75rem;
   --text-label: 0.6875rem;
-  --tracking: -0.008em;
-  /* Small caps labels carry the structure: names, days, states. */
-  --tracking-label: 0.14em;
+  --tracking: -0.009em;
 
-  --gutter: clamp(18px, 4vw, 34px);
-  --column: 34rem;
-  /* The time axis: one width, shared by the list and the thread. */
-  --axis: 5.25rem;
-  --axis-gap: clamp(18px, 3vw, 34px);
+  --gutter: clamp(16px, 4vw, 26px);
+  --column: 40rem;
 
-  /* Corners are small and consistent — nothing is pill-shaped. */
-  --radius: 6px;
-  --radius-panel: 10px;
-  --radius-mark: 5px;
+  --radius: 8px;
+  --radius-bubble: 16px;
+  --radius-tight: 5px;
+  --radius-panel: 12px;
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --bg: #faf9f6;
+  --bg: #faf9f7;
   --veil: #ffffff;
-  --veil-high: #f1efe9;
-  --ink: #17161a;
-  --ink-soft: #5f5d63;
-  --ink-faint: #93909a;
-  --hair: rgb(20 18 24 / 11%);
-  --hair-strong: rgb(20 18 24 / 20%);
+  --veil-high: #f0eeea;
+  --ink: #191819;
+  --ink-soft: #5e5c60;
+  --ink-faint: #918f95;
+  --hair: rgb(20 18 20 / 10%);
+  --hair-strong: rgb(20 18 20 / 18%);
 
   --accent: #8a6a1c;
   --accent-ink: #fffdf6;
   --accent-soft: rgb(138 106 28 / 12%);
 
-  --shadow-lift: 0 1px 2px rgb(20 18 24 / 6%), 0 14px 34px -16px rgb(20 18 24 / 24%);
-  --shadow-float: 0 26px 66px -24px rgb(20 18 24 / 32%);
+  --mine: #ebe7dd;
+  --mine-ink: #191819;
+
+  --shadow-lift: 0 1px 2px rgb(20 18 20 / 6%), 0 12px 30px -16px rgb(20 18 20 / 22%);
+  --shadow-float: 0 24px 60px -24px rgb(20 18 20 / 30%);
 }

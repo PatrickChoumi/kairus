@@ -1,52 +1,55 @@
 # Kairus
 
-Une messagerie où l'interface disparaît.
+Une messagerie qui fait l'essentiel, et rien autour.
 
-Kairus fait ce que fait Telegram — conversations en temps réel, réponses,
-présence, accusés de lecture, recherche — mais refuse la grammaire habituelle
-des applications de messagerie : pas de barre latérale, pas de barre d'outils,
-pas d'écran de réglages, pas de menu contextuel. Il reste une surface, un geste,
-et un champ.
+Kairus fait ce que fait Telegram — conversations en temps réel, groupes,
+fichiers, réponses, présence, accusés de lecture, recherche, notifications —
+dans la disposition que tout le monde connaît déjà : une liste de
+conversations, des bulles, un avatar et un nom. Ce qui le distingue n'est pas
+une grammaire à réapprendre, c'est ce qu'on a retiré.
 
 ---
 
 ## Le parti pris
 
-**Une seule surface.** La liste et la conversation ne sont pas deux écrans mais
-deux états d'une même surface. Quand vous ouvrez un fil, sa marque — le visage
-d'une personne, ou la couleur d'un groupe — quitte sa ligne dans la liste et se
-pose sur l'en-tête du fil, portée par un ressort. Rien d'autre ne bouge indépendamment : c'est ce qui fait lire
-les deux vues comme un seul lieu plutôt que comme une navigation.
+**La disposition que vous connaissez.** Deux volets sur un écran large — la
+liste à gauche, la conversation à droite ; un seul volet à la fois sur un
+téléphone, avec la flèche de retour et le balayage attendus. Vos messages à
+droite, ceux d'en face à gauche. Aucune de ces décisions n'est à découvrir.
 
-**Zéro chrome.** Au repos, aucun bouton n'est visible. Le bouton d'envoi
-n'apparaît que lorsqu'il y a quelque chose à envoyer. L'heure d'un message
-n'apparaît qu'en fin de groupe ou au survol. Le filet sous l'en-tête n'existe
+**Moins de surfaces.** Pas d'écran de réglages, pas de barre d'outils, pas de
+rangée d'icônes : quatre actions nommées en toutes lettres au-dessus de la
+liste, deux dans l'en-tête d'un fil. L'heure et l'accusé de lecture
+n'apparaissent qu'en fin de prise de parole. Le filet sous l'en-tête n'existe
 que s'il y a quelque chose de défilé en dessous.
 
 **Le Curseur.** `⌘K` (ou `Ctrl+K`) ouvre le point de commande de
-l'application — le même que les boutons de la liste ouvrent en le pointant
-déjà sur ce que vous avez choisi. Il cherche vos conversations, trouve des personnes, fouille vos
-messages, change de thème, bascule en mode lecture, vous déconnecte. Les
-commandes qui demandent plus qu'un nom — changer sa phrase secrète, réunir un
-groupe — posent leurs questions une à une dans ce même champ.
+l'application — le même que les boutons visibles ouvrent en le pointant déjà
+sur ce que vous avez choisi. Il cherche vos conversations, trouve des
+personnes, fouille vos messages, change de thème, bascule en mode lecture, vous
+déconnecte. Les commandes qui demandent plus qu'un nom — changer sa phrase
+secrète, réunir un groupe — posent leurs questions une à une dans ce même
+champ. C'est ce qui remplace l'écran de réglages.
 
 **Du mouvement physique.** Chaque transition d'état est un ressort intégré
 image par image (`client/src/motion/spring.ts`), pas une courbe de Bézier. Un
 ressort est interruptible : si vous changez d'avis à mi-parcours, le mouvement
-repart de sa position et de sa vitesse réelles au lieu de sauter.
+repart de sa position et de sa vitesse réelles au lieu de sauter. Quand vous
+ouvrez un fil, l'avatar quitte sa ligne dans la liste et se pose sur
+l'en-tête — un même objet qui se déplace, pas deux copies.
 
-**Des gestes en plus des boutons.** Tirer un message sur le côté y répond.
-Tirer le fil vers la droite le referme. Double-cliquer répond aussi. `↑` dans un
-champ vide rouvre votre dernier message pour le corriger. Clic droit — ou appui
-long — révèle l'horodatage exact et le peu qu'on peut faire à un message :
-répondre, et, si c'est le vôtre, modifier ou retirer.
+**Des gestes en plus des boutons.** Ce qu'on peut faire à un message est écrit
+en toutes lettres à côté de lui, au survol ou après un appui long : répondre,
+et, si c'est le vôtre, modifier ou retirer. Les gestes sont un raccourci, pas
+la seule voie : tirer un message vers le centre y répond, tirer le fil vers la
+droite le referme, double-cliquer répond aussi, `↑` dans un champ vide rouvre
+votre dernier message pour le corriger.
 
-**Une présence ambiante.** Pas d'étiquette « en ligne » : une aura qui pulse
-lentement autour de la marque, et plus vite quand la personne écrit.
-
-**Une seule couleur.** Un or, et rien d'autre : votre propre voix, et le focus.
-Pas de bleu, pas de violet — les couleurs des messageries que Kairus n'est pas.
-Thèmes clair et sombre, avec respect de `prefers-reduced-motion`.
+**Une seule couleur.** Un or chaud, et rien d'autre : ce qui n'est pas lu, ce
+qui a le focus, et le bouton d'envoi. Vos propres bulles sont une surface
+chaude, pas un aplat saturé. Pas de bleu, pas de vert — les couleurs des
+messageries que Kairus n'est pas. Thèmes clair et sombre, avec respect de
+`prefers-reduced-motion`.
 
 ---
 

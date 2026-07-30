@@ -20,8 +20,26 @@ const rectOf = (el: Element | null): Rect | null => {
 }
 
 /**
- * The whole application is this one surface. The list and the thread are two
- * states of it, not two pages, and the transition between them is continuous.
+ * Two panes side by side when there is room, one at a time when there is not —
+ * the arrangement every messenger uses, because it is the one people expect.
+ */
+function useTwoPane(): boolean {
+  const [wide, setWide] = useState(
+    () => typeof matchMedia === 'function' && matchMedia('(min-width: 900px)').matches,
+  )
+  useEffect(() => {
+    const query = matchMedia('(min-width: 900px)')
+    const onChange = () => setWide(query.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  return wide
+}
+
+/**
+ * The whole application is this one surface. On a narrow screen the list and
+ * the thread are two states of it rather than two pages, and the transition
+ * between them is continuous; on a wide one they simply sit next to each other.
  */
 export function Stage() {
   const open = useStore((s) => s.open)
@@ -36,8 +54,10 @@ export function Stage() {
    * derived rather than stored, because the header has to exist on the very
    * first render after opening — that is when its position is measured.
    */
+  const twoPane = useTwoPane()
   const [residual, setResidual] = useState<string | null>(null)
-  const showing = open ?? residual
+  /* Side by side, a closed thread has nowhere to leave to: it just goes. */
+  const showing = open ?? (twoPane ? null : residual)
   const [morph, setMorph] = useState<Morph | null>(null)
 
   const railLayer = useRef<HTMLDivElement>(null)
@@ -54,16 +74,26 @@ export function Stage() {
 
   useSpringTo(open ? 1 : 0, SPRING.solid, (t) => {
     const rail = railLayer.current
-    if (rail) {
-      rail.style.opacity = String(1 - t)
-      rail.style.transform = `scale(${1 - t * 0.04})`
-      rail.style.pointerEvents = t > 0.5 ? 'none' : 'auto'
-    }
     const thread = threadLayer.current
-    if (thread) {
-      thread.style.opacity = String(t)
-      thread.style.transform = `translate3d(0, ${(1 - t) * 20}px, 0)`
-      thread.style.pointerEvents = t > 0.5 ? 'auto' : 'none'
+    if (twoPane) {
+      // Both panes are simply there; nothing has to give way for the other.
+      for (const layer of [rail, thread]) {
+        if (!layer) continue
+        layer.style.opacity = ''
+        layer.style.transform = ''
+        layer.style.pointerEvents = ''
+      }
+    } else {
+      if (rail) {
+        rail.style.opacity = String(1 - t)
+        rail.style.transform = `scale(${1 - t * 0.04})`
+        rail.style.pointerEvents = t > 0.5 ? 'none' : 'auto'
+      }
+      if (thread) {
+        thread.style.opacity = String(t)
+        thread.style.transform = `translate3d(0, ${(1 - t) * 20}px, 0)`
+        thread.style.pointerEvents = t > 0.5 ? 'auto' : 'none'
+      }
     }
     if (t < 0.01 && !useStore.getState().open) setResidual(null)
   })
@@ -168,17 +198,21 @@ export function Stage() {
   return (
     <div className="stage" data-view={open ? 'thread' : 'rail'} data-cursor={cursor || undefined}>
       <div className="layer layer--rail" ref={railLayer}>
-        <Rail onOpen={onOpen} dimmed={Boolean(open) || cursor} />
+        <Rail onOpen={onOpen} dimmed={twoPane ? cursor : Boolean(open) || cursor} />
       </div>
 
-      {conversation && (
-        <div className="layer layer--thread" ref={threadLayer} {...swipe}>
-          <Thread
-            conversation={conversation}
-            onLeave={close}
-            headSigil={headSigil}
-            sigilHidden={Boolean(morph)}
-          />
+      {(conversation || twoPane) && (
+        <div className="layer layer--thread" ref={threadLayer} {...(twoPane ? {} : swipe)}>
+          {conversation ? (
+            <Thread
+              conversation={conversation}
+              onLeave={close}
+              headSigil={headSigil}
+              sigilHidden={Boolean(morph)}
+            />
+          ) : (
+            <p className="pane__void">Choisissez une conversation.</p>
+          )}
         </div>
       )}
 

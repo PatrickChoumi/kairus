@@ -8,11 +8,11 @@ import {
 } from 'react'
 import { useStore, useThread } from '../state/store'
 import { Sigil } from '../ui/Sigil'
-import { Turn } from './Turn'
+import { Bubble } from './Bubble'
 import { Composer } from './Composer'
 import { Lightbox } from './Lightbox'
 import { Menu } from './Menu'
-import { dayLabel, sameBreath, sameDay, silence } from '../lib/time'
+import { dayLabel, sameBreath, sameDay } from '../lib/time'
 import type { Attachment, Conversation } from '../net/types'
 
 type Props = {
@@ -24,14 +24,14 @@ type Props = {
 
 const NEAR_BOTTOM = 120
 
-/** What the line under the name says, which is never the word "online". */
+/** The line under the name: who is there, or who this is. */
 function presence(conversation: Conversation, online: number, typing: boolean): string {
   if (typing) return 'écrit…'
   if (conversation.kind === 'group') {
     const total = conversation.members.length + 1
-    return online > 0 ? `${total} personnes · ${online} là` : `${total} personnes`
+    return online > 0 ? `${total} membres · ${online} en ligne` : `${total} membres`
   }
-  return online > 0 ? 'là' : `@${conversation.members[0]?.handle ?? ''}`
+  return online > 0 ? 'en ligne' : `@${conversation.members[0]?.handle ?? ''}`
 }
 
 export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props) {
@@ -120,7 +120,7 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
 
         <Sigil
           user={conversation.face}
-          size={30}
+          size={34}
           present={online > 0}
           innerRef={headSigil}
           hidden={sigilHidden}
@@ -152,7 +152,7 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
           {messages.length === 0 && (
             <p className="stream__void">
               Rien n’a encore été dit.
-              <span>Écrivez la première ligne.</span>
+              <span>Écrivez le premier message.</span>
             </p>
           )}
 
@@ -173,10 +173,6 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
               !sameBreath(message.createdAt, next.createdAt) ||
               !sameDay(message.createdAt, next.createdAt)
 
-            // A silence takes up room, because on this axis time is distance.
-            const pause =
-              previous && !opensDay ? silence(previous.createdAt, message.createdAt) : null
-
             const quoted = message.replyTo ? (byId.get(message.replyTo) ?? null) : null
 
             return (
@@ -186,17 +182,16 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
                     <span>{dayLabel(message.createdAt)}</span>
                   </div>
                 )}
-                {pause && (
-                  <div className="hush">
-                    <span>{pause}</span>
-                  </div>
-                )}
-                <Turn
+                <Bubble
                   message={message}
                   mine={mine}
                   opens={opens}
                   closes={closes}
-                  author={nameOf(message.senderId)}
+                  author={
+                    conversation.kind === 'group' && !mine && opens
+                      ? nameOf(message.senderId)
+                      : null
+                  }
                   authorHue={hueOf(message.senderId)}
                   quoted={quoted}
                   quotedAuthor={quoted ? nameOf(quoted.senderId) : null}
@@ -213,8 +208,10 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
           })}
 
           {typing && (
-            <div className="hush hush--live" aria-live="polite">
-              <span>{conversation.face.name} écrit</span>
+            <div className="typing" aria-live="polite" aria-label="écrit">
+              <span />
+              <span />
+              <span />
             </div>
           )}
         </div>

@@ -11,9 +11,10 @@ type Props = {
   mine: boolean
   /** First of a run from the same person — the one that carries the name. */
   opens: boolean
-  /** Last of that run — the one that carries the state. */
+  /** Last of that run — the one that carries the time and the state. */
   closes: boolean
-  author: string
+  /** Said only where it is needed: in a group, above someone else's run. */
+  author: string | null
   authorHue: number | null
   quoted: Message | null
   quotedAuthor: string | null
@@ -27,14 +28,12 @@ type Props = {
 const REPLY_AT = 56
 
 /**
- * One utterance, placed on the time axis.
- *
- * There is no bubble and no left/right split: the hour sits in its own column,
- * a tick marks the moment on the spine, and what was said is simply text. What
- * you can do to it lives in the right margin — present, but at a whisper until
- * the pointer arrives.
+ * One message, in the shape everybody already knows: a bubble, yours on the
+ * right and theirs on the left. What you can do to it is a small row of words
+ * that surfaces on approach — visible, rather than a gesture you must be told
+ * about.
  */
-export function Turn({
+export function Bubble({
   message,
   mine,
   opens,
@@ -65,12 +64,14 @@ export function Turn({
     axis: 'x',
     onMove(delta) {
       if (gone) return
-      const along = Math.max(delta, 0)
-      offset.set(rubberBand(along, REPLY_AT))
-      if (!armed.current && along >= REPLY_AT) {
+      // Pulling towards the middle of the screen is the answering direction.
+      const along = mine ? Math.min(delta, 0) : Math.max(delta, 0)
+      const magnitude = rubberBand(Math.abs(along), REPLY_AT)
+      offset.set(mine ? -magnitude : magnitude)
+      if (!armed.current && Math.abs(along) >= REPLY_AT) {
         armed.current = true
         navigator.vibrate?.(8)
-      } else if (armed.current && along < REPLY_AT) {
+      } else if (armed.current && Math.abs(along) < REPLY_AT) {
         armed.current = false
       }
     },
@@ -81,42 +82,37 @@ export function Turn({
     },
   })
 
-  const style =
-    authorHue === null ? undefined : ({ '--hue': authorHue } as CSSProperties)
+  const style = authorHue === null ? undefined : ({ '--hue': authorHue } as CSSProperties)
 
   return (
     <div
-      className="turn"
+      className="line"
       data-mine={mine || undefined}
       data-opens={opens || undefined}
       data-closes={closes || undefined}
       data-pending={message.pending || undefined}
       data-gone={gone || undefined}
+      data-wordless={message.attachment && !message.body && !gone ? true : undefined}
       data-held={held || undefined}
       style={style}
       ref={row}
       {...drag}
+      onDoubleClick={() => !gone && onReply(message)}
       onContextMenu={(event) => {
         event.preventDefault()
         if (!gone) setHeld((h) => !h)
       }}
     >
-      <time
-        className="turn__when"
-        dateTime={new Date(message.createdAt).toISOString()}
-        title={exact(message.createdAt)}
-      >
-        {opens ? clock(message.createdAt) : ''}
-      </time>
+      <span className="line__cue" aria-hidden="true">
+        ↩
+      </span>
 
-      <span className="turn__tick" aria-hidden="true" />
-
-      <div className="turn__said">
-        {opens && <span className="turn__who">{author}</span>}
+      <div className="bubble">
+        {author && <span className="bubble__author">{author}</span>}
 
         {quoted && (
           <button
-            className="turn__quote"
+            className="bubble__quote"
             type="button"
             onClick={() => {
               document
@@ -124,54 +120,55 @@ export function Turn({
                 ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
             }}
           >
-            <span className="turn__quote-who">{quotedAuthor}</span>
-            <span className="turn__quote-body">
+            <span className="bubble__quote-who">{quotedAuthor}</span>
+            <span className="bubble__quote-body">
               {quoted.deletedAt ? 'message retiré' : quoted.body}
             </span>
           </button>
         )}
 
         {gone ? (
-          <p className="turn__gone" id={`m-${message.id}`}>
+          <p className="bubble__gone" id={`m-${message.id}`}>
             message retiré
           </p>
         ) : (
           <>
             {message.attachment && <Carried message={message} onOpen={onOpenImage} />}
             {message.body && (
-              <p className="turn__text" id={`m-${message.id}`}>
+              <p className="bubble__body" id={`m-${message.id}`}>
                 {message.body}
               </p>
             )}
           </>
         )}
 
-        {(message.editedAt || (mine && closes && !gone)) && (
-          <span className="turn__state">
+        {(closes || message.editedAt) && !gone && (
+          <span className="bubble__meta">
             {message.editedAt && <span>modifié</span>}
-            {mine && closes && !gone && <span>{read ? 'lu' : 'envoyé'}</span>}
+            <time
+              dateTime={new Date(message.createdAt).toISOString()}
+              title={exact(message.createdAt)}
+            >
+              {clock(message.createdAt)}
+            </time>
+            {mine && <span className="bubble__seen" data-read={read || undefined} />}
           </span>
         )}
       </div>
 
-      {/* Present at rest, legible on approach: never a hidden gesture only. */}
       {!gone && (
-        <div className="turn__acts" data-open={held || undefined}>
+        <div className="line__acts" data-open={held || undefined}>
           <button onClick={() => onReply(message)}>répondre</button>
           {mine && !message.pending && (
             <>
               <button onClick={() => onEdit(message)}>modifier</button>
-              <button className="turn__undo" onClick={() => onRetract(message)}>
+              <button className="line__undo" onClick={() => onRetract(message)}>
                 retirer
               </button>
             </>
           )}
         </div>
       )}
-
-      <span className="turn__cue" aria-hidden="true">
-        ↩
-      </span>
     </div>
   )
 }

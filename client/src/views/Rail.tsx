@@ -11,8 +11,8 @@ type Props = {
 }
 
 /**
- * Everything you are part of, on the same time axis the thread uses: the hour
- * in its own column, then the mark, then what was last said. The controls are
+ * The list of conversations, in the shape everyone already knows: an avatar, a
+ * name, the last thing said, the hour and a count. The controls above it are
  * words rather than icons — there are few enough of them to name.
  */
 export function Rail({ onOpen, dimmed }: Props) {
@@ -21,6 +21,7 @@ export function Rail({ onOpen, dimmed }: Props) {
   const online = useStore((s) => s.online)
   const typing = useStore((s) => s.typing)
   const link = useStore((s) => s.link)
+  const open = useStore((s) => s.open)
   const setCursor = useStore((s) => s.setCursor)
 
   const sigils = useRef(new Map<string, HTMLSpanElement | null>())
@@ -100,43 +101,47 @@ export function Rail({ onOpen, dimmed }: Props) {
                 <button
                   className="row"
                   data-aimed={index === aimed || undefined}
+                  data-current={conversation.id === open || undefined}
                   data-unread={conversation.unread > 0 || undefined}
                   onPointerEnter={() => setAimed(index)}
                   onClick={() => onOpen(conversation, sigils.current.get(conversation.id) ?? null)}
                 >
-                  <time className="row__when">{last ? stamp(last.createdAt) : ''}</time>
-
                   <Sigil
                     user={conversation.face}
-                    size={30}
+                    size={42}
                     present={present}
                     innerRef={(el) => sigils.current.set(conversation.id, el)}
                   />
 
                   <span className="row__text">
-                    <span className="row__name">
-                      {conversation.face.name}
-                      {conversation.kind === 'group' && (
-                        <span className="row__count">{conversation.members.length + 1}</span>
-                      )}
+                    <span className="row__top">
+                      <span className="row__name">
+                        {conversation.face.name}
+                        {conversation.kind === 'group' && (
+                          <span className="row__count">{conversation.members.length + 1}</span>
+                        )}
+                      </span>
+                      <time className="row__when">{last ? stamp(last.createdAt) : ''}</time>
                     </span>
-                    <span className="row__last">
-                      {stirring ? (
-                        <em className="row__stirring">écrit…</em>
-                      ) : last ? (
-                        <>
-                          {mine && <span className="row__you">vous · </span>}
-                          {last.body || (last.attachment ? 'a envoyé un fichier' : '')}
-                        </>
-                      ) : (
-                        <span className="row__empty">rien encore</span>
+
+                    <span className="row__bottom">
+                      <span className="row__last">
+                        {stirring ? (
+                          <em className="row__stirring">écrit…</em>
+                        ) : last ? (
+                          <>
+                            {mine && <span className="row__you">vous : </span>}
+                            {last.body || (last.attachment ? 'a envoyé un fichier' : '')}
+                          </>
+                        ) : (
+                          <span className="row__empty">rien encore</span>
+                        )}
+                      </span>
+                      {conversation.unread > 0 && (
+                        <span className="row__unread">{conversation.unread}</span>
                       )}
                     </span>
                   </span>
-
-                  {conversation.unread > 0 && (
-                    <span className="row__unread">{conversation.unread}</span>
-                  )}
                 </button>
               </li>
             )

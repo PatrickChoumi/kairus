@@ -55,24 +55,3 @@ export const sameDay = (a: number, b: number) => startOfDay(a) === startOfDay(b)
 
 /** Messages close in time from the same person read as one utterance. */
 export const sameBreath = (a: number, b: number) => Math.abs(a - b) < 4 * 60_000
-
-/** Below this, a pause is just the rhythm of talking and is not worth marking. */
-const NOTABLE_SILENCE = 6 * 60_000
-
-/**
- * How long nobody said anything — the label that gives a silence its place on
- * the axis. Returns null when the gap is too short to be worth a word.
- */
-export function silence(from: number, to: number): string | null {
-  const ms = to - from
-  if (ms < NOTABLE_SILENCE) return null
-
-  const minutes = Math.round(ms / 60_000)
-  if (minutes < 60) return `${minutes} minutes`
-
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return hours === 1 ? 'une heure' : `${hours} heures`
-
-  const days = Math.round(hours / 24)
-  return days === 1 ? 'un jour' : `${days} jours`
-}

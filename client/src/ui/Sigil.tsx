@@ -5,7 +5,7 @@ type Props = {
   /** Anything with a name and a colour: a person, or a group. */
   user: Face
   size?: number
-  /** Whether anyone is there. Stated, not merely implied by a glow. */
+  /** Whether anyone is there — a dot on the corner, as everyone expects. */
   present?: boolean
   innerRef?: Ref<HTMLSpanElement>
   hidden?: boolean
@@ -21,13 +21,11 @@ function letters(name: string): string {
 }
 
 /**
- * A person or a group, rendered as a mark.
- *
- * Square, not round: the circular avatar is the single most recognisable
- * borrowed gesture in messaging, and Kairus does not borrow it. The colour is
- * derived on the server, so an identity always wears the same one.
+ * A person or a group. The colour is derived from the handle on the server, so
+ * an identity always wears the same one — which is what stands in for a photo
+ * until there is such a thing as a photo.
  */
-export function Sigil({ user, size = 34, present, innerRef, hidden }: Props) {
+export function Sigil({ user, size = 42, present, innerRef, hidden }: Props) {
   const style = {
     '--hue': user.hue,
     '--size': `${size}px`,
@@ -37,7 +35,7 @@ export function Sigil({ user, size = 34, present, innerRef, hidden }: Props) {
   return (
     <span
       ref={innerRef}
-      className="mark"
+      className="avatar"
       style={style}
       data-present={present || undefined}
       aria-hidden="true"

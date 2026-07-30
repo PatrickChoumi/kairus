@@ -71,7 +71,7 @@ export function Threshold() {
     <main className="threshold">
       <div className="threshold__panel" ref={panel} style={{ opacity: 0 }}>
         <h1 className="wordmark">kairus</h1>
-        <p className="threshold__line">là où l’interface disparaît</p>
+        <p className="threshold__line">l’essentiel, et rien autour</p>
 
         <form className="threshold__form" onSubmit={submit}>
           <label className="field">

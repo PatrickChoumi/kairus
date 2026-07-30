@@ -9,8 +9,9 @@
 
 .waking::before {
   content: '';
-  inline-size: 5px;
-  block-size: 5px;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
   background: var(--ink-faint);
   animation: waking 1.6s ease-in-out infinite;
 }
@@ -23,7 +24,7 @@
   }
   50% {
     opacity: 0.9;
-    transform: scale(1.5);
+    transform: scale(1.4);
   }
 }
 
@@ -37,29 +38,65 @@
   position: absolute;
   inset: 0;
   will-change: transform, opacity;
-  transform-origin: 50% 40%;
+  transform-origin: 50% 42%;
 }
 
 .layer--thread {
   touch-action: pan-y;
 }
 
+/*
+ * Wide enough for both: the list on one side, the conversation on the other,
+ * exactly where every messenger puts them.
+ */
+@media (min-width: 900px) {
+  .stage {
+    display: grid;
+    grid-template-columns: minmax(17rem, 21rem) 1fr;
+  }
+
+  .layer {
+    position: relative;
+    inset: auto;
+    min-inline-size: 0;
+    will-change: auto;
+  }
+
+  .layer--rail {
+    border-inline-end: 1px solid var(--hair);
+  }
+
+  .rail {
+    inline-size: 100%;
+    margin-inline: 0;
+  }
+
+  /* Going back is what the other pane is for. */
+  .bar .bar__back {
+    display: none;
+  }
+}
+
+.pane__void {
+  display: grid;
+  place-content: center;
+  block-size: 100%;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+}
+
 .wordmark {
   font-size: 0.8125rem;
   font-weight: 400;
-  letter-spacing: 0.34em;
+  letter-spacing: 0.3em;
   text-transform: lowercase;
   color: var(--ink-faint);
 }
 
-/* ------------------------------------------------------------------- mark */
+/* ----------------------------------------------------------------- avatar */
 
-/*
- * Square, not round. The circular avatar is the most borrowed shape in
- * messaging; a rectangle with a letter in it belongs to no one else.
- */
-.mark {
-  --size: 34px;
+.avatar {
+  --size: 42px;
   --hue: 250;
   position: relative;
   display: grid;
@@ -67,29 +104,27 @@
   flex: 0 0 auto;
   inline-size: var(--size);
   block-size: var(--size);
-  border-radius: var(--radius-mark);
-  background: hsl(var(--hue) 34% 24%);
-  color: hsl(var(--hue) 60% 82%);
+  border-radius: 50%;
+  background: hsl(var(--hue) 32% 26%);
+  color: hsl(var(--hue) 58% 84%);
   font-size: calc(var(--size) * 0.34);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: 500;
   user-select: none;
 }
 
-:root[data-theme='light'] .mark {
-  background: hsl(var(--hue) 40% 88%);
-  color: hsl(var(--hue) 45% 28%);
+:root[data-theme='light'] .avatar {
+  background: hsl(var(--hue) 38% 89%);
+  color: hsl(var(--hue) 42% 30%);
 }
 
-/* Presence is a corner cut off the mark, not a glow around it. */
-.mark[data-present]::after {
+.avatar[data-present]::after {
   content: '';
   position: absolute;
-  inset-block-start: -2px;
-  inset-inline-end: -2px;
-  inline-size: 7px;
-  block-size: 7px;
-  border-radius: 2px;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  inline-size: calc(var(--size) * 0.26);
+  block-size: calc(var(--size) * 0.26);
+  border-radius: 50%;
   background: var(--accent);
   box-shadow: 0 0 0 2px var(--bg);
 }
@@ -120,12 +155,7 @@
 .threshold__line {
   color: var(--ink-faint);
   font-size: var(--text-meta);
-  margin-block-end: 38px;
-}
-
-.threshold__form {
-  display: grid;
-  gap: 0;
+  margin-block-end: 36px;
 }
 
 .field {
@@ -167,7 +197,6 @@
   color: var(--accent-ink);
   font-weight: 600;
   font-size: 0.875rem;
-  letter-spacing: 0.01em;
   transition: filter 0.2s ease;
 }
 
@@ -278,10 +307,10 @@
   display: flex;
   flex-direction: column;
   block-size: 100%;
-  inline-size: min(100%, 40rem);
+  inline-size: min(100%, 34rem);
   margin-inline: auto;
   padding-inline: var(--gutter);
-  padding-block-start: max(env(safe-area-inset-top), 22px);
+  padding-block-start: max(env(safe-area-inset-top), 20px);
   padding-block-end: max(env(safe-area-inset-bottom), 10px);
 }
 
@@ -289,7 +318,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 20px;
+  gap: 18px;
   flex-wrap: wrap;
   padding-block-end: 14px;
   border-block-end: 1px solid var(--hair);
@@ -298,7 +327,7 @@
 .rail__self {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   min-inline-size: 0;
 }
 
@@ -316,9 +345,9 @@
 }
 
 .link {
-  inline-size: 5px;
-  block-size: 5px;
-  border-radius: 1px;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
   background: var(--ink-faint);
   transition: background-color 0.4s ease;
 }
@@ -332,40 +361,39 @@
   animation: waking 1.4s ease-in-out infinite;
 }
 
-/* Named actions, not icons: there are four of them, and words are clearer. */
+/* Named actions rather than icons: there are four, and words are clearer. */
 .rail__acts {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
 .rail__acts button,
 .bar__acts button {
-  padding: 5px 11px;
-  border: 1px solid var(--hair);
-  border-radius: var(--radius);
+  padding: 5px 10px;
+  border-radius: var(--radius-tight);
   font-size: var(--text-meta);
   color: var(--ink-soft);
   transition:
-    border-color 0.18s ease,
-    color 0.18s ease;
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 
 .rail__acts button:hover,
 .bar__acts button:hover {
-  border-color: var(--hair-strong);
+  background: var(--veil);
   color: var(--ink);
 }
 
 .rail__list {
   flex: 1;
   overflow-y: auto;
-  padding-block-start: 8px;
-  margin-inline: calc(var(--gutter) * -0.4);
+  padding-block-start: 6px;
+  margin-inline: calc(var(--gutter) * -0.45);
 }
 
 .rail__list > li {
-  animation: settle 0.44s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation: settle 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
   animation-delay: calc(var(--i) * 22ms);
 }
 
@@ -376,14 +404,13 @@
   }
 }
 
-/* The same axis as the thread: the hour, then the mark, then the words. */
+/* The row everyone knows: avatar, name and preview, hour and count. */
 .row {
-  display: grid;
-  grid-template-columns: 3.25rem auto 1fr auto;
+  display: flex;
   align-items: center;
-  gap: 0 14px;
+  gap: 13px;
   inline-size: 100%;
-  padding: 10px calc(var(--gutter) * 0.4);
+  padding: 9px calc(var(--gutter) * 0.45);
   border-radius: var(--radius);
   text-align: start;
   transition: background-color 0.16s ease;
@@ -393,24 +420,36 @@
   background: var(--veil);
 }
 
-.row__when {
-  font-size: var(--text-label);
-  color: var(--ink-faint);
-  font-variant-numeric: tabular-nums;
-  text-align: end;
+/* Which conversation the other pane is showing. */
+.row[data-current] {
+  background: var(--veil-high);
 }
 
 .row__text {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-inline-size: 0;
-  gap: 1px;
+  gap: 2px;
+}
+
+.row__top,
+.row__bottom {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.row__bottom {
+  align-items: center;
 }
 
 .row__name {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: 6px;
+  flex: 1;
+  min-inline-size: 0;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -429,7 +468,16 @@
   content: '· ';
 }
 
+.row__when {
+  flex: 0 0 auto;
+  font-size: var(--text-label);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .row__last {
+  flex: 1;
+  min-inline-size: 0;
   font-size: 0.8125rem;
   color: var(--ink-soft);
   overflow: hidden;
@@ -452,12 +500,15 @@
 }
 
 .row__unread {
-  padding: 1px 7px;
-  border-radius: 3px;
+  flex: 0 0 auto;
+  min-inline-size: 18px;
+  padding: 1px 6px;
+  border-radius: 99px;
   background: var(--accent);
   color: var(--accent-ink);
   font-size: var(--text-label);
   font-weight: 600;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
@@ -467,7 +518,7 @@
   place-content: center;
   justify-items: start;
   gap: 10px;
-  max-inline-size: 26rem;
+  max-inline-size: 24rem;
   margin-inline: auto;
 }
 
@@ -517,7 +568,7 @@ kbd {
   color: var(--ink-soft);
 }
 
-/* ------------------------------------------------------------------- bar */
+/* -------------------------------------------------------------------- bar */
 
 .thread {
   display: flex;
@@ -528,13 +579,13 @@ kbd {
 .bar {
   position: relative;
   z-index: 3;
-  display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  display: flex;
   align-items: center;
   gap: 12px;
-  padding: max(env(safe-area-inset-top), 14px) max(var(--gutter), calc(50% - 26rem + var(--gutter)))
-    12px;
-  background: color-mix(in oklab, var(--bg) 82%, transparent);
+  /* Lines up with the left edge of the bubbles, whatever the pane is worth. */
+  padding: max(env(safe-area-inset-top), 12px)
+    max(var(--gutter), calc(50% - var(--column) / 2)) 10px;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
   backdrop-filter: saturate(140%) blur(18px);
   border-block-end: 1px solid transparent;
   transition: border-color 0.3s ease;
@@ -545,22 +596,21 @@ kbd {
 }
 
 .bar__back {
-  inline-size: 26px;
-  block-size: 26px;
+  inline-size: 28px;
+  block-size: 28px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--hair);
-  border-radius: var(--radius);
+  border-radius: var(--radius-tight);
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: 1.125rem;
   line-height: 1;
   transition:
-    border-color 0.18s ease,
-    color 0.18s ease;
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 
 .bar__back:hover {
-  border-color: var(--hair-strong);
+  background: var(--veil);
   color: var(--ink);
 }
 
@@ -580,14 +630,13 @@ kbd {
 }
 
 .bar__state {
-  font-size: var(--text-label);
-  letter-spacing: 0.05em;
+  font-size: var(--text-meta);
   color: var(--ink-faint);
 }
 
 .bar__acts {
   display: flex;
-  gap: 6px;
+  gap: 2px;
 }
 
 .bar__more {
@@ -599,14 +648,14 @@ kbd {
 
 .menu {
   position: absolute;
-  inset-block-start: calc(100% - 4px);
-  inset-inline-end: max(var(--gutter), calc(50% - 26rem + var(--gutter)));
+  inset-block-start: calc(100% - 2px);
+  inset-inline-end: max(var(--gutter), calc(50% - var(--column) / 2));
   z-index: 4;
   display: flex;
   flex-direction: column;
   min-inline-size: 13rem;
   padding: 5px;
-  border: 1px solid var(--hair-strong);
+  border: 1px solid var(--hair);
   border-radius: var(--radius-panel);
   background: var(--veil);
   box-shadow: var(--shadow-lift);
@@ -615,7 +664,7 @@ kbd {
 
 .menu button {
   padding: 8px 11px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-tight);
   text-align: start;
   font-size: 0.8125rem;
   color: var(--ink-soft);
@@ -636,7 +685,6 @@ kbd {
 .menu__note {
   padding: 8px 11px 5px;
   font-size: var(--text-label);
-  letter-spacing: 0.05em;
   color: var(--ink-faint);
   border-block-start: 1px solid var(--hair);
   margin-block-start: 4px;
@@ -651,33 +699,20 @@ kbd {
 }
 
 .stream__inner {
-  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   min-block-size: 100%;
-  inline-size: min(100%, 52rem);
+  inline-size: min(100%, calc(var(--column) + var(--gutter) * 2));
   margin-inline: auto;
-  padding: 26px var(--gutter) 14px;
-}
-
-/* The spine: the axis every hour hangs from. */
-.stream__inner::before {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: calc(var(--gutter) + var(--axis) + var(--axis-gap) / 2);
-  inline-size: 1px;
-  background: var(--hair);
-  /* It fades in from above: the axis has no beginning, only a present. */
-  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000);
+  padding: 18px var(--gutter) 10px;
 }
 
 .stream__void {
   display: grid;
   gap: 6px;
-  padding-block: 18vh;
-  padding-inline-start: calc(var(--axis) + var(--axis-gap));
+  padding-block: 20vh;
+  text-align: center;
   color: var(--ink-soft);
 }
 
@@ -686,221 +721,257 @@ kbd {
   color: var(--ink-faint);
 }
 
-/* ------------------------------------------------------------------ turn */
+.daymark {
+  display: flex;
+  justify-content: center;
+  margin-block: 20px 12px;
+}
 
-.turn {
+.daymark span {
+  padding: 3px 11px;
+  border-radius: 99px;
+  background: var(--veil);
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
+/* ---------------------------------------------------------------- bubbles */
+
+.line {
   position: relative;
-  display: grid;
-  grid-template-columns: var(--axis) 1fr;
-  column-gap: var(--axis-gap);
-  padding-block: 1px;
+  display: flex;
+  align-items: flex-end;
+  margin-block: 1px;
   touch-action: pan-y;
   will-change: transform;
 }
 
-.turn[data-opens] {
-  margin-block-start: 14px;
+.line[data-opens] {
+  margin-block-start: 10px;
 }
 
-.turn__when {
-  grid-column: 1;
-  text-align: end;
-  font-size: var(--text-label);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
-  color: var(--ink-faint);
-  padding-block-start: 2px;
+.line[data-mine] {
+  justify-content: flex-end;
 }
 
-/* One tick per utterance, sitting on the spine at its own moment. */
-.turn__tick {
-  position: absolute;
-  inset-inline-start: calc(var(--axis) + var(--axis-gap) / 2 - 3px);
-  inset-block-start: 8px;
-  inline-size: 6px;
-  block-size: 6px;
-  border-radius: 50%;
-  background: var(--bg);
-  box-shadow: inset 0 0 0 1px var(--ink-faint);
+.line[data-held] {
+  z-index: 4;
 }
 
-.turn[data-mine] .turn__tick {
-  background: var(--accent);
-  box-shadow: none;
+.bubble {
+  position: relative;
+  max-inline-size: min(78%, 30rem);
+  padding: 8px 12px;
+  border-radius: var(--radius-bubble);
+  background: var(--veil);
 }
 
-.turn:not([data-opens]) .turn__tick {
-  opacity: 0;
+.line[data-mine] .bubble {
+  background: var(--mine);
+  color: var(--mine-ink);
 }
 
-.turn__said {
-  grid-column: 2;
-  max-inline-size: var(--column);
-  min-inline-size: 0;
+/* On paper white, an incoming bubble needs an edge to exist at all. */
+:root[data-theme='light'] .line:not([data-mine]):not([data-gone]) .bubble {
+  box-shadow: 0 0 0 1px var(--hair);
 }
 
-.turn__who {
+/* Grouped messages share an edge, which is what makes a run read as one. */
+.line:not([data-opens]):not([data-mine]) .bubble {
+  border-start-start-radius: var(--radius-tight);
+}
+
+.line:not([data-closes]):not([data-mine]) .bubble {
+  border-end-start-radius: var(--radius-tight);
+}
+
+.line[data-mine]:not([data-opens]) .bubble {
+  border-start-end-radius: var(--radius-tight);
+}
+
+.line[data-mine]:not([data-closes]) .bubble {
+  border-end-end-radius: var(--radius-tight);
+}
+
+.line[data-wordless] .bubble {
+  padding: 4px;
+}
+
+.line[data-pending] .bubble {
+  opacity: 0.55;
+}
+
+.line[data-gone] .bubble {
+  background: none;
+  border: 1px dashed var(--hair-strong);
+}
+
+.bubble__author {
   display: block;
+  margin-block-end: 2px;
   font-size: var(--text-label);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: hsl(var(--hue, 250) 42% 66%);
-  margin-block-end: 3px;
+  font-weight: 600;
+  color: hsl(var(--hue, 250) 46% 68%);
 }
 
-.turn[data-mine] .turn__who {
-  color: var(--accent);
+:root[data-theme='light'] .bubble__author {
+  color: hsl(var(--hue, 250) 46% 38%);
 }
 
-:root[data-theme='light'] .turn__who {
-  color: hsl(var(--hue, 250) 44% 40%);
-}
-
-.turn__text {
-  overflow-wrap: anywhere;
+.bubble__body {
   white-space: pre-wrap;
-  line-height: 1.52;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
 }
 
-.turn[data-pending] .turn__said {
-  opacity: 0.5;
-}
-
-.turn__gone {
+.bubble__gone {
   font-style: italic;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: var(--ink-faint);
 }
 
-.turn__quote {
+.bubble__quote {
   display: block;
   inline-size: 100%;
-  margin-block-end: 4px;
-  padding-inline-start: 11px;
-  border-inline-start: 2px solid var(--hair-strong);
+  margin-block-end: 5px;
+  padding: 4px 9px;
+  border-inline-start: 2px solid var(--accent);
+  border-radius: var(--radius-tight);
+  background: rgb(128 128 150 / 12%);
   text-align: start;
 }
 
-.turn__quote-who {
+.bubble__quote-who {
   display: block;
   font-size: var(--text-label);
-  letter-spacing: 0.08em;
-  color: var(--ink-faint);
+  font-weight: 600;
+  color: var(--ink-soft);
 }
 
-.turn__quote-body {
+.bubble__quote-body {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: var(--ink-soft);
 }
 
-.turn__state {
+.bubble__meta {
   display: flex;
-  gap: 10px;
-  margin-block-start: 3px;
+  align-items: center;
+  gap: 6px;
+  float: inline-end;
+  margin-inline-start: 10px;
+  margin-block-start: 4px;
   font-size: var(--text-label);
-  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
 }
 
-/* Present at rest, legible on approach — never a hidden gesture only. */
-.turn__acts {
+.bubble__seen {
+  inline-size: 5px;
+  block-size: 5px;
+  border-radius: 50%;
+  border: 1px solid currentcolor;
+}
+
+.bubble__seen[data-read] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.line__cue {
   position: absolute;
-  inset-inline-end: 0;
-  inset-block-start: 2px;
-  display: flex;
-  gap: 12px;
-  font-size: var(--text-label);
-  letter-spacing: 0.03em;
-  opacity: 0;
-  transition: opacity 0.16s ease;
-}
-
-.turn:hover .turn__acts,
-.turn:focus-within .turn__acts,
-.turn__acts[data-open] {
-  opacity: 1;
-}
-
-.turn__acts button {
+  inset-block: 0;
+  display: grid;
+  place-items: center;
+  inline-size: 36px;
   color: var(--ink-faint);
-  transition: color 0.14s ease;
-}
-
-.turn__acts button:hover {
-  color: var(--ink);
-}
-
-.turn__acts .turn__undo:hover {
-  color: hsl(6 62% 64%);
-}
-
-.turn__cue {
-  position: absolute;
-  inset-inline-start: calc(var(--axis) + var(--axis-gap) - 22px);
-  inset-block-start: 2px;
   font-size: 0.8125rem;
-  color: var(--ink-faint);
   opacity: var(--pull, 0);
   pointer-events: none;
 }
 
-/* Marks on the axis: a day beginning, and a silence taking its place. */
-.daymark,
-.hush {
-  display: grid;
-  grid-template-columns: var(--axis) 1fr;
-  column-gap: var(--axis-gap);
-  align-items: center;
+.line:not([data-mine]) .line__cue {
+  inset-inline-start: -36px;
 }
 
-.daymark {
-  margin-block: 26px 16px;
+.line[data-mine] .line__cue {
+  inset-inline-end: -36px;
 }
 
-.daymark span {
-  grid-column: 2;
+/* Visible on approach, and on a long press — never a gesture you must know. */
+.line__acts {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  padding-inline: 10px;
   font-size: var(--text-label);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
   color: var(--ink-faint);
+  opacity: 0;
+  transition: opacity 0.16s ease;
 }
 
-.daymark span::after {
-  content: '';
-  flex: 1;
-  block-size: 1px;
-  background: var(--hair);
+.line[data-mine] .line__acts {
+  order: -1;
 }
 
-.hush {
-  margin-block: 14px;
+.line:hover .line__acts,
+.line:focus-within .line__acts,
+.line__acts[data-open] {
+  opacity: 1;
 }
 
-.hush span {
-  grid-column: 2;
-  font-size: var(--text-label);
-  letter-spacing: 0.05em;
-  color: var(--ink-faint);
+.line__acts button {
+  color: inherit;
+  white-space: nowrap;
+  transition: color 0.14s ease;
 }
 
-.hush span::before {
-  content: '— ';
+.line__acts button:hover {
+  color: var(--ink);
 }
 
-.hush--live span {
-  color: var(--accent);
+.line__acts .line__undo:hover {
+  color: hsl(6 62% 64%);
 }
 
-.hush--live span::after {
-  content: '…';
+.typing {
+  display: flex;
+  gap: 4px;
+  padding: 12px 4px;
+}
+
+.typing span {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  animation: breath 1.3s ease-in-out infinite;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes breath {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
 }
 
 /* --------------------------------------------------------------- carried */
@@ -908,8 +979,7 @@ kbd {
 .carried {
   position: relative;
   display: block;
-  max-inline-size: 22rem;
-  margin-block: 4px 5px;
+  inline-size: 100%;
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -936,8 +1006,9 @@ kbd {
 
 .carried__waiting::before {
   content: '';
-  inline-size: 5px;
-  block-size: 5px;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
   background: var(--ink-faint);
   animation: waking 1.6s ease-in-out infinite;
 }
@@ -970,8 +1041,9 @@ kbd {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 8px 11px;
-  border: 1px solid var(--hair);
+  padding: 8px 10px;
+  margin-block-end: 2px;
+  border: 1px solid var(--hair-strong);
   border-radius: var(--radius);
   text-align: start;
   transition: border-color 0.18s ease;
@@ -985,12 +1057,12 @@ kbd {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  inline-size: 26px;
-  block-size: 26px;
-  border-radius: 3px;
-  border: 1px solid var(--hair-strong);
-  color: var(--ink-soft);
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: 50%;
+  border: 1px solid currentcolor;
   font-size: 0.8125rem;
+  opacity: 0.7;
 }
 
 .carried__about {
@@ -1008,7 +1080,7 @@ kbd {
 
 .carried__size {
   font-size: var(--text-label);
-  color: var(--ink-faint);
+  opacity: 0.65;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1023,7 +1095,7 @@ kbd {
   place-items: center;
   gap: 14px;
   padding: max(4vh, 22px) var(--gutter);
-  background: color-mix(in oklab, #05050a 90%, transparent);
+  background: color-mix(in srgb, #05050a 90%, transparent);
   backdrop-filter: blur(8px);
 }
 
@@ -1048,7 +1120,7 @@ kbd {
   gap: 16px;
   max-inline-size: 100%;
   padding: 7px 14px;
-  border-radius: var(--radius);
+  border-radius: 99px;
   background: rgb(255 255 255 / 9%);
   font-size: 0.8125rem;
   color: rgb(255 255 255 / 88%);
@@ -1074,28 +1146,30 @@ kbd {
 
 .composer {
   position: relative;
-  inline-size: min(100%, 52rem);
+  inline-size: min(100%, calc(var(--column) + var(--gutter) * 2));
   margin-inline: auto;
-  padding: 10px var(--gutter) max(env(safe-area-inset-bottom), 16px);
+  padding: 6px var(--gutter) max(env(safe-area-inset-bottom), 14px);
 }
 
 .composer__reply {
-  display: grid;
-  grid-template-columns: var(--axis) 1fr auto;
-  column-gap: var(--axis-gap);
+  display: flex;
   align-items: center;
-  margin-block-end: 8px;
+  gap: 9px;
+  margin-block-end: 6px;
+  padding: 7px 11px;
+  border-radius: var(--radius);
+  background: var(--veil);
   font-size: 0.8125rem;
   color: var(--ink-soft);
   animation: settle 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .composer__reply-mark {
-  text-align: end;
   color: var(--accent);
 }
 
 .composer__reply-body {
+  flex: 1;
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1104,18 +1178,23 @@ kbd {
 
 .composer__reply-drop {
   color: var(--ink-faint);
-  font-size: 1rem;
+  font-size: 1.0625rem;
   line-height: 1;
 }
 
-/* Aligned on the same axis: your own line continues the conversation's grid. */
 .composer__line {
-  display: grid;
-  grid-template-columns: var(--axis) 1fr auto auto;
-  column-gap: var(--axis-gap);
-  align-items: end;
-  padding-block-start: 12px;
-  border-block-start: 1px solid var(--hair);
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 7px 8px 7px 14px;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius-bubble);
+  background: var(--veil);
+  transition: border-color 0.25s ease;
+}
+
+.composer__line:focus-within {
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
 }
 
 .composer__picker {
@@ -1124,8 +1203,8 @@ kbd {
 
 .composer__clip,
 .composer__send {
-  align-self: end;
-  margin-block-end: 2px;
+  align-self: center;
+  flex: 0 0 auto;
   font-size: var(--text-meta);
   transition:
     color 0.16s ease,
@@ -1133,9 +1212,6 @@ kbd {
 }
 
 .composer__clip {
-  grid-column: 1;
-  grid-row: 1;
-  justify-self: end;
   color: var(--ink-faint);
 }
 
@@ -1149,13 +1225,13 @@ kbd {
 }
 
 .composer__input {
-  grid-column: 2;
+  flex: 1;
   min-inline-size: 0;
   max-block-size: 168px;
-  padding-block: 0 2px;
+  padding-block: 6px;
   outline: none;
   overflow-y: auto;
-  line-height: 1.52;
+  line-height: 1.45;
   background: none;
 }
 
@@ -1164,7 +1240,7 @@ kbd {
 }
 
 .composer__send {
-  padding: 5px 13px;
+  padding: 6px 14px;
   border-radius: var(--radius);
   background: var(--accent);
   color: var(--accent-ink);
@@ -1176,7 +1252,8 @@ kbd {
 }
 
 .composer[data-hovering] .composer__line {
-  border-block-start-color: var(--accent);
+  border-color: var(--accent);
+  border-style: dashed;
 }
 
 .composer__catch {
@@ -1186,14 +1263,14 @@ kbd {
   padding: 10px;
   border: 1px dashed var(--accent);
   border-radius: var(--radius);
-  background: color-mix(in oklab, var(--bg) 90%, transparent);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
   text-align: center;
   font-size: 0.8125rem;
   color: var(--ink-soft);
   pointer-events: none;
 }
 
-/* Reading mode: the words, and as little else as can be managed. */
+/* Reading mode: the messages, and as little else as can be managed. */
 .thread[data-reading] .bar {
   opacity: 0;
   pointer-events: none;
@@ -1201,13 +1278,12 @@ kbd {
 
 .thread[data-reading] .stream__inner,
 .thread[data-reading] .composer {
-  --axis: 3.5rem;
-  --column: 30rem;
+  --column: 32rem;
 }
 
-.thread[data-reading] .turn__text {
+.thread[data-reading] .bubble__body {
   font-size: 1.0625rem;
-  line-height: 1.62;
+  line-height: 1.6;
 }
 
 /* ----------------------------------------------------------------- flight */
@@ -1222,7 +1298,7 @@ kbd {
   will-change: transform;
 }
 
-.flight .mark {
+.flight .avatar {
   inline-size: 100%;
   block-size: 100%;
 }
@@ -1237,7 +1313,7 @@ kbd {
   justify-items: center;
   align-content: start;
   padding: max(11vh, 56px) var(--gutter) var(--gutter);
-  background: color-mix(in oklab, var(--bg) 66%, transparent);
+  background: color-mix(in srgb, var(--bg) 66%, transparent);
   backdrop-filter: blur(12px) saturate(130%);
 }
 
@@ -1246,7 +1322,7 @@ kbd {
   max-block-size: min(60vh, 30rem);
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--hair-strong);
+  border: 1px solid var(--hair);
   border-radius: var(--radius-panel);
   background: var(--veil);
   box-shadow: var(--shadow-float);
@@ -1261,7 +1337,7 @@ kbd {
   gap: 12px;
   padding: 11px 18px 0;
   font-size: var(--text-label);
-  letter-spacing: var(--tracking-label);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
@@ -1294,7 +1370,7 @@ kbd {
   display: block;
   padding: 11px 12px 4px;
   font-size: var(--text-label);
-  letter-spacing: var(--tracking-label);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
@@ -1304,7 +1380,7 @@ kbd {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-tight);
   cursor: pointer;
 }
 
@@ -1315,9 +1391,9 @@ kbd {
 .cursor__glyph {
   display: grid;
   place-items: center;
-  inline-size: 24px;
-  block-size: 24px;
-  border-radius: 3px;
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: 50%;
   background: var(--veil-high);
   color: var(--ink-faint);
   font-size: 0.75rem;
@@ -1362,8 +1438,7 @@ kbd {
   z-index: 60;
   max-inline-size: calc(100vw - var(--gutter) * 2);
   padding: 8px 14px;
-  border: 1px solid var(--hair-strong);
-  border-radius: var(--radius);
+  border-radius: 99px;
   background: var(--veil);
   box-shadow: var(--shadow-lift);
   font-size: 0.8125rem;
@@ -1378,16 +1453,30 @@ kbd {
 /* ------------------------------------------------------------------ small */
 
 @media (max-width: 680px) {
-  :root {
-    --axis: 3.25rem;
-    --axis-gap: 14px;
+  .bubble {
+    max-inline-size: 84%;
   }
 
-  .turn__acts {
-    position: static;
+  /* No hover on a touch screen: a long press is what opens these. */
+  .line__acts {
+    display: none;
+  }
+
+  .line__acts[data-open] {
+    display: flex;
+    position: absolute;
+    inset-block-start: calc(100% - 2px);
+    inset-inline-start: 0;
+    z-index: 5;
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    background: var(--veil);
+    box-shadow: var(--shadow-lift);
     opacity: 1;
-    grid-column: 2;
-    margin-block-start: 5px;
+  }
+
+  .line[data-mine] .line__acts[data-open] {
+    inset-inline: auto 0;
   }
 
   .rail__head {
