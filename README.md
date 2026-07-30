@@ -23,19 +23,19 @@ n'apparaît que lorsqu'il y a quelque chose à envoyer. L'heure d'un message
 n'apparaît qu'en fin de groupe ou au survol. Le filet sous l'en-tête n'existe
 que s'il y a quelque chose de défilé en dessous.
 
-**Le Curseur.** `⌘K` (ou `Ctrl+K`) ouvre le seul point de commande de
-l'application. Il cherche vos conversations, trouve des personnes, fouille vos
+**Le Curseur.** `⌘K` (ou `Ctrl+K`) ouvre le point de commande de
+l'application — le même que les boutons de la liste ouvrent en le pointant
+déjà sur ce que vous avez choisi. Il cherche vos conversations, trouve des personnes, fouille vos
 messages, change de thème, bascule en mode lecture, vous déconnecte. Les
-commandes qui demandent plus qu'un nom — changer sa phrase secrète — posent
-leurs questions une à une dans ce même champ. Il n'y a pas d'écran de réglages
-parce qu'il n'y en a pas besoin.
+commandes qui demandent plus qu'un nom — changer sa phrase secrète, réunir un
+groupe — posent leurs questions une à une dans ce même champ.
 
 **Du mouvement physique.** Chaque transition d'état est un ressort intégré
 image par image (`client/src/motion/spring.ts`), pas une courbe de Bézier. Un
 ressort est interruptible : si vous changez d'avis à mi-parcours, le mouvement
 repart de sa position et de sa vitesse réelles au lieu de sauter.
 
-**Des gestes plutôt que des boutons.** Tirer un message sur le côté y répond.
+**Des gestes en plus des boutons.** Tirer un message sur le côté y répond.
 Tirer le fil vers la droite le referme. Double-cliquer répond aussi. `↑` dans un
 champ vide rouvre votre dernier message pour le corriger. Clic droit — ou appui
 long — révèle l'horodatage exact et le peu qu'on peut faire à un message :
@@ -44,10 +44,9 @@ répondre, et, si c'est le vôtre, modifier ou retirer.
 **Une présence ambiante.** Pas d'étiquette « en ligne » : une aura qui pulse
 lentement autour de la marque, et plus vite quand la personne écrit.
 
-**Une seule couleur.** L'accent ne sert qu'à deux choses : ce que vous avez
-écrit vous-même, et le focus. Tout le reste est monochrome, pour que l'œil
-n'ait qu'un seul endroit où se poser. Thèmes clair et sombre, avec respect de
-`prefers-reduced-motion`.
+**Une seule couleur.** Un or, et rien d'autre : votre propre voix, et le focus.
+Pas de bleu, pas de violet — les couleurs des messageries que Kairus n'est pas.
+Thèmes clair et sombre, avec respect de `prefers-reduced-motion`.
 
 ---
 

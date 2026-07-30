@@ -5,11 +5,16 @@ import { stamp } from '../lib/time'
 import type { Conversation } from '../net/types'
 
 type Props = {
-  /** Hands the row's sigil to the stage so it can carry it into the thread. */
+  /** Hands the row's mark to the stage so it can carry it into the thread. */
   onOpen: (conversation: Conversation, sigil: HTMLElement | null) => void
   dimmed: boolean
 }
 
+/**
+ * Everything you are part of, on the same time axis the thread uses: the hour
+ * in its own column, then the mark, then what was last said. The controls are
+ * words rather than icons — there are few enough of them to name.
+ */
 export function Rail({ onOpen, dimmed }: Props) {
   const me = useStore((s) => s.me)
   const conversations = useStore((s) => s.conversations)
@@ -56,20 +61,32 @@ export function Rail({ onOpen, dimmed }: Props) {
   return (
     <div className="rail" aria-hidden={dimmed || undefined}>
       <header className="rail__head">
-        <Sigil user={me} size={34} />
         <div className="rail__self">
-          <span className="rail__name">{me.name}</span>
-          <span className="rail__handle">@{me.handle}</span>
+          <span className="wordmark">kairus</span>
+          <span className="rail__me">
+            {me.name} <span>@{me.handle}</span>
+            <span className="link" data-link={link} title={link === 'live' ? 'connecté' : 'reconnexion'} />
+          </span>
         </div>
-        <span className="link" data-link={link} title={link === 'live' ? 'connecté' : 'reconnexion'} />
+
+        <nav className="rail__acts">
+          <button onClick={() => setCursor(true, '@')}>écrire à</button>
+          <button onClick={() => setCursor(true, 'réunir un groupe')}>groupe</button>
+          <button onClick={() => setCursor(true)}>chercher</button>
+          <button onClick={() => setCursor(true, 'réglages')}>réglages</button>
+        </nav>
       </header>
 
       {conversations.length === 0 ? (
         <div className="rail__void">
-          <p>Rien encore.</p>
-          <button className="rail__void-go" onClick={() => setCursor(true)}>
-            appeler quelqu’un
-          </button>
+          <p>Aucune conversation.</p>
+          <p className="rail__void-how">
+            Écrivez à quelqu’un par son nom d’usage, ou réunissez un groupe.
+          </p>
+          <div className="rail__void-acts">
+            <button onClick={() => setCursor(true, '@')}>écrire à quelqu’un</button>
+            <button onClick={() => setCursor(true, 'réunir un groupe')}>réunir un groupe</button>
+          </div>
         </div>
       ) : (
         <ul className="rail__list">
@@ -77,7 +94,6 @@ export function Rail({ onOpen, dimmed }: Props) {
             const last = conversation.lastMessage
             const mine = last?.senderId === me.id
             const stirring = Boolean(typing[conversation.id])
-            // A group is "here" when anyone in it is.
             const present = conversation.members.some((m) => online[m.id])
             return (
               <li key={conversation.id} style={{ ['--i' as string]: index }}>
@@ -88,13 +104,15 @@ export function Rail({ onOpen, dimmed }: Props) {
                   onPointerEnter={() => setAimed(index)}
                   onClick={() => onOpen(conversation, sigils.current.get(conversation.id) ?? null)}
                 >
+                  <time className="row__when">{last ? stamp(last.createdAt) : ''}</time>
+
                   <Sigil
                     user={conversation.face}
-                    size={44}
+                    size={30}
                     present={present}
-                    stirring={stirring}
                     innerRef={(el) => sigils.current.set(conversation.id, el)}
                   />
+
                   <span className="row__text">
                     <span className="row__name">
                       {conversation.face.name}
@@ -108,17 +126,17 @@ export function Rail({ onOpen, dimmed }: Props) {
                       ) : last ? (
                         <>
                           {mine && <span className="row__you">vous · </span>}
-                          {last.body}
+                          {last.body || (last.attachment ? 'a envoyé un fichier' : '')}
                         </>
                       ) : (
-                        <span className="row__empty">conversation ouverte</span>
+                        <span className="row__empty">rien encore</span>
                       )}
                     </span>
                   </span>
-                  <span className="row__aside">
-                    <time className="row__time">{last ? stamp(last.createdAt) : ''}</time>
-                    {conversation.unread > 0 && <span className="row__dot" />}
-                  </span>
+
+                  {conversation.unread > 0 && (
+                    <span className="row__unread">{conversation.unread}</span>
+                  )}
                 </button>
               </li>
             )
@@ -126,10 +144,11 @@ export function Rail({ onOpen, dimmed }: Props) {
         </ul>
       )}
 
-      <footer className="rail__hint">
-        <kbd>⌘</kbd>
-        <kbd>K</kbd>
-        <span>pour tout faire</span>
+      <footer className="rail__foot">
+        <span>
+          <kbd>⌘</kbd>
+          <kbd>K</kbd> ouvre la même chose au clavier
+        </span>
       </footer>
     </div>
   )

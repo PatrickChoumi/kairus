@@ -32,6 +32,8 @@ type State = {
   theme: Theme
   reading: boolean
   cursor: boolean
+  /** What the Cursor should already have in its field when it opens. */
+  cursorSeed: string
   notice: string | null
   /** Shown once, right after it is minted, and never recoverable afterwards. */
   keepsake: string | null
@@ -76,7 +78,7 @@ type Actions = {
 
   setTheme: (theme: Theme) => void
   toggleReading: () => void
-  setCursor: (open: boolean) => void
+  setCursor: (open: boolean, seed?: string) => void
   notify: (text: string | null) => void
 }
 
@@ -323,6 +325,7 @@ export const useStore = create<State & Actions>((set, get) => {
     theme: storedTheme(),
     reading: false,
     cursor: false,
+    cursorSeed: '',
     notice: null,
     keepsake: null,
 
@@ -683,8 +686,8 @@ export const useStore = create<State & Actions>((set, get) => {
       set((s) => ({ reading: !s.reading }))
     },
 
-    setCursor(open) {
-      set({ cursor: open })
+    setCursor(open, seed = '') {
+      set({ cursor: open, cursorSeed: open ? seed : '' })
     },
 
     notify(text) {

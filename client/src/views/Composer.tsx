@@ -34,12 +34,11 @@ export function Composer({ peerName }: { peerName: string }) {
 
   const ready = draft.trim().length > 0
 
+  // The button is always there; only its weight changes with what you wrote.
   useSpringTo(ready ? 1 : 0, SPRING.crisp, (t) => {
     const el = send.current
     if (!el) return
-    el.style.opacity = String(t)
-    el.style.transform = `scale(${0.6 + t * 0.4})`
-    el.style.pointerEvents = t > 0.5 ? 'auto' : 'none'
+    el.style.opacity = String(0.4 + t * 0.6)
   })
 
   // A textarea that grows with what you write, and stops growing politely.
@@ -190,17 +189,9 @@ export function Composer({ peerName }: { peerName: string }) {
           type="button"
           onClick={() => picker.current?.click()}
           disabled={Boolean(editing)}
-          aria-label="joindre un fichier"
+          title="joindre un fichier"
         >
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path
-              d="M12 5v14M5 12h14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-            />
-          </svg>
+          joindre
         </button>
         <textarea
           ref={area}
@@ -221,34 +212,8 @@ export function Composer({ peerName }: { peerName: string }) {
             delete document.documentElement.dataset.writing
           }}
         />
-        <button
-          ref={send}
-          className="composer__send"
-          onClick={dispatch}
-          tabIndex={ready ? 0 : -1}
-          aria-label={editing ? 'enregistrer' : 'envoyer'}
-        >
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            {editing ? (
-              <path
-                d="M5 12.5 10 17.5 19 7"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ) : (
-              <path
-                d="M5 12h13M12 5.5 18.5 12 12 18.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            )}
-          </svg>
+        <button ref={send} className="composer__send" onClick={dispatch} disabled={!ready}>
+          {editing ? 'enregistrer' : 'envoyer'}
         </button>
       </div>
 

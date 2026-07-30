@@ -9,9 +9,8 @@
 
 .waking::before {
   content: '';
-  inline-size: 6px;
-  block-size: 6px;
-  border-radius: 50%;
+  inline-size: 5px;
+  block-size: 5px;
   background: var(--ink-faint);
   animation: waking 1.6s ease-in-out infinite;
 }
@@ -24,7 +23,7 @@
   }
   50% {
     opacity: 0.9;
-    transform: scale(1.4);
+    transform: scale(1.5);
   }
 }
 
@@ -38,17 +37,29 @@
   position: absolute;
   inset: 0;
   will-change: transform, opacity;
-  transform-origin: 50% 42%;
+  transform-origin: 50% 40%;
 }
 
 .layer--thread {
   touch-action: pan-y;
 }
 
-/* ------------------------------------------------------------------ sigil */
+.wordmark {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  letter-spacing: 0.34em;
+  text-transform: lowercase;
+  color: var(--ink-faint);
+}
 
-.sigil {
-  --size: 40px;
+/* ------------------------------------------------------------------- mark */
+
+/*
+ * Square, not round. The circular avatar is the most borrowed shape in
+ * messaging; a rectangle with a letter in it belongs to no one else.
+ */
+.mark {
+  --size: 34px;
   --hue: 250;
   position: relative;
   display: grid;
@@ -56,57 +67,37 @@
   flex: 0 0 auto;
   inline-size: var(--size);
   block-size: var(--size);
-  border-radius: 50%;
-  background: linear-gradient(
-    150deg,
-    hsl(var(--hue) 56% 64%),
-    hsl(calc(var(--hue) + 34) 48% 44%)
-  );
+  border-radius: var(--radius-mark);
+  background: hsl(var(--hue) 34% 24%);
+  color: hsl(var(--hue) 60% 82%);
+  font-size: calc(var(--size) * 0.34);
+  font-weight: 600;
+  letter-spacing: 0.02em;
   user-select: none;
 }
 
-.sigil__face {
-  font-size: calc(var(--size) * 0.4);
-  font-weight: 500;
-  line-height: 1;
-  color: rgb(255 255 255 / 94%);
-  letter-spacing: 0;
+:root[data-theme='light'] .mark {
+  background: hsl(var(--hue) 40% 88%);
+  color: hsl(var(--hue) 45% 28%);
 }
 
-.sigil::after {
+/* Presence is a corner cut off the mark, not a glow around it. */
+.mark[data-present]::after {
   content: '';
   position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 1.5px solid transparent;
-  pointer-events: none;
-}
-
-.sigil[data-present]::after {
-  border-color: hsl(var(--hue) 70% 64% / 60%);
-  animation: aura 3.6s ease-in-out infinite;
-}
-
-.sigil[data-stirring]::after {
-  animation-duration: 1.1s;
-  border-color: hsl(var(--hue) 78% 68% / 85%);
-}
-
-@keyframes aura {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.45;
-  }
-  50% {
-    transform: scale(1.09);
-    opacity: 1;
-  }
+  inset-block-start: -2px;
+  inset-inline-end: -2px;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
 }
 
 /* -------------------------------------------------------------- threshold */
 
-.threshold {
+.threshold,
+.keepsake {
   position: fixed;
   inset: 0;
   display: grid;
@@ -115,35 +106,33 @@
 }
 
 .threshold__panel {
-  inline-size: min(100%, 20rem);
+  inline-size: min(100%, 21rem);
   opacity: 0;
 }
 
-.wordmark {
-  font-size: 1.5rem;
-  font-weight: 400;
-  letter-spacing: 0.16em;
-  text-transform: lowercase;
-  margin-block-end: 6px;
+.threshold__panel .wordmark {
+  display: block;
+  font-size: 1.125rem;
+  color: var(--ink);
+  margin-block-end: 8px;
 }
 
 .threshold__line {
   color: var(--ink-faint);
   font-size: var(--text-meta);
-  letter-spacing: 0.02em;
-  margin-block-end: 40px;
+  margin-block-end: 38px;
 }
 
 .threshold__form {
   display: grid;
-  gap: 2px;
+  gap: 0;
 }
 
 .field {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-block: 12px;
+  gap: 12px;
+  padding-block: 13px;
   border-block-end: 1px solid var(--hair);
   transition: border-color 0.3s ease;
 }
@@ -154,8 +143,8 @@
 
 .field__mark {
   color: var(--ink-faint);
-  font-size: var(--text-meta);
-  inline-size: 10px;
+  font-size: var(--text-label);
+  inline-size: 12px;
   text-align: center;
 }
 
@@ -169,79 +158,72 @@
   color: var(--ink-faint);
 }
 
-.threshold__go {
-  margin-block-start: 28px;
-  padding-block: 12px;
-  border-radius: var(--radius-field);
+.threshold__go,
+.keepsake__go {
+  margin-block-start: 26px;
+  padding-block: 11px;
+  border-radius: var(--radius);
   background: var(--accent);
   color: var(--accent-ink);
-  font-weight: 500;
-  transition:
-    transform 0.16s ease,
-    filter 0.2s ease;
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.01em;
+  transition: filter 0.2s ease;
 }
 
-.threshold__go:hover {
+.threshold__go:hover,
+.keepsake__go:not(:disabled):hover {
   filter: brightness(1.08);
 }
 
-.threshold__go:active {
-  transform: scale(0.985);
-}
-
-.threshold__go:disabled {
-  opacity: 0.5;
-  cursor: default;
+.threshold__go:disabled,
+.keepsake__go:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .threshold__error {
   min-block-size: 1.25rem;
-  margin-block-start: 14px;
+  margin-block-start: 12px;
   font-size: var(--text-meta);
-  color: var(--ink-faint);
   opacity: 0;
   transition: opacity 0.25s ease;
 }
 
 .threshold__error[data-shown] {
   opacity: 1;
-  color: hsl(4 70% 66%);
+  color: hsl(6 62% 62%);
 }
 
 .threshold__ways {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
-  margin-block-start: 4px;
+  gap: 4px 18px;
 }
 
-.threshold__ways button {
+.threshold__ways button,
+.keepsake__copy {
   font-size: var(--text-meta);
   color: var(--ink-faint);
+  border-block-end: 1px solid var(--hair);
+  padding-block-end: 1px;
   transition: color 0.2s ease;
 }
 
-.threshold__ways button:hover {
-  color: var(--ink-soft);
+.threshold__ways button:hover,
+.keepsake__copy:hover {
+  color: var(--ink);
 }
 
 /* ---------------------------------------------------------------- keepsake */
 
-.keepsake {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: var(--gutter);
-}
-
 .keepsake__panel {
-  inline-size: min(100%, 26rem);
+  inline-size: min(100%, 25rem);
 }
 
 .keepsake__title {
-  font-size: 1.125rem;
-  font-weight: 500;
+  font-size: 1.0625rem;
+  font-weight: 600;
   margin-block-end: 8px;
 }
 
@@ -249,17 +231,17 @@
   color: var(--ink-soft);
   font-size: 0.8125rem;
   line-height: 1.55;
-  margin-block-end: 26px;
+  margin-block-end: 24px;
 }
 
 .keepsake__phrase {
-  padding: 18px 16px;
+  padding: 16px;
   border: 1px solid var(--hair-strong);
-  border-radius: var(--radius-field);
+  border-radius: var(--radius);
   background: var(--veil);
   font-family: var(--font-mono);
-  font-size: 1.0625rem;
-  letter-spacing: 0.06em;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
   text-align: center;
   overflow-wrap: anywhere;
   user-select: all;
@@ -268,23 +250,7 @@
 .keepsake__acts {
   display: flex;
   justify-content: center;
-  margin-block: 12px 26px;
-}
-
-.keepsake__copy {
-  padding: 6px 14px;
-  border: 1px solid var(--hair-strong);
-  border-radius: 99px;
-  font-size: 0.75rem;
-  color: var(--ink-soft);
-  transition:
-    border-color 0.2s ease,
-    color 0.2s ease;
-}
-
-.keepsake__copy:hover {
-  border-color: var(--accent);
-  color: var(--ink);
+  margin-block: 12px 24px;
 }
 
 .keepsake__vow {
@@ -297,32 +263,13 @@
 }
 
 .keepsake__vow input {
-  inline-size: 16px;
-  block-size: 16px;
+  inline-size: 15px;
+  block-size: 15px;
   accent-color: var(--accent);
-  cursor: pointer;
 }
 
 .keepsake__go {
   inline-size: 100%;
-  margin-block-start: 22px;
-  padding-block: 12px;
-  border-radius: var(--radius-field);
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 500;
-  transition:
-    opacity 0.2s ease,
-    filter 0.2s ease;
-}
-
-.keepsake__go:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.keepsake__go:not(:disabled):hover {
-  filter: brightness(1.08);
 }
 
 /* ------------------------------------------------------------------- rail */
@@ -331,91 +278,131 @@
   display: flex;
   flex-direction: column;
   block-size: 100%;
-  inline-size: min(100%, 32rem);
+  inline-size: min(100%, 40rem);
   margin-inline: auto;
   padding-inline: var(--gutter);
-  padding-block-start: max(env(safe-area-inset-top), 20px);
-  padding-block-end: max(env(safe-area-inset-bottom), 12px);
+  padding-block-start: max(env(safe-area-inset-top), 22px);
+  padding-block-end: max(env(safe-area-inset-bottom), 10px);
 }
 
 .rail__head {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-block: 12px 26px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-block-end: 14px;
+  border-block-end: 1px solid var(--hair);
 }
 
 .rail__self {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  gap: 5px;
   min-inline-size: 0;
 }
 
-.rail__name {
+.rail__me {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: var(--text);
   font-weight: 500;
 }
 
-.rail__handle {
-  font-size: var(--text-meta);
+.rail__me span:first-of-type {
+  font-weight: 400;
   color: var(--ink-faint);
 }
 
 .link {
-  inline-size: 6px;
-  block-size: 6px;
-  border-radius: 50%;
+  inline-size: 5px;
+  block-size: 5px;
+  border-radius: 1px;
   background: var(--ink-faint);
   transition: background-color 0.4s ease;
 }
 
 .link[data-link='live'] {
-  background: hsl(150 52% 52%);
+  background: var(--accent);
 }
 
 .link[data-link='reaching'] {
-  background: hsl(42 80% 58%);
-  animation: aura 1.4s ease-in-out infinite;
+  background: hsl(38 74% 56%);
+  animation: waking 1.4s ease-in-out infinite;
+}
+
+/* Named actions, not icons: there are four of them, and words are clearer. */
+.rail__acts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rail__acts button,
+.bar__acts button {
+  padding: 5px 11px;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius);
+  font-size: var(--text-meta);
+  color: var(--ink-soft);
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.rail__acts button:hover,
+.bar__acts button:hover {
+  border-color: var(--hair-strong);
+  color: var(--ink);
 }
 
 .rail__list {
   flex: 1;
   overflow-y: auto;
-  margin-inline: calc(var(--gutter) * -0.5);
+  padding-block-start: 8px;
+  margin-inline: calc(var(--gutter) * -0.4);
 }
 
 .rail__list > li {
-  animation: settle 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
-  animation-delay: calc(var(--i) * 26ms);
+  animation: settle 0.44s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation-delay: calc(var(--i) * 22ms);
 }
 
 @keyframes settle {
   from {
     opacity: 0;
-    transform: translate3d(0, 10px, 0);
+    transform: translate3d(0, 8px, 0);
   }
 }
 
+/* The same axis as the thread: the hour, then the mark, then the words. */
 .row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 3.25rem auto 1fr auto;
   align-items: center;
-  gap: 13px;
+  gap: 0 14px;
   inline-size: 100%;
-  padding: 10px calc(var(--gutter) * 0.5);
-  border-radius: 14px;
+  padding: 10px calc(var(--gutter) * 0.4);
+  border-radius: var(--radius);
   text-align: start;
-  transition: background-color 0.18s ease;
+  transition: background-color 0.16s ease;
 }
 
 .row[data-aimed] {
   background: var(--veil);
 }
 
+.row__when {
+  font-size: var(--text-label);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
 .row__text {
   display: flex;
   flex-direction: column;
-  flex: 1;
   min-inline-size: 0;
   gap: 1px;
 }
@@ -430,16 +417,16 @@
   white-space: nowrap;
 }
 
-/* How many people are in a group, stated once and quietly. */
 .row__count {
   flex: 0 0 auto;
-  font-size: 0.625rem;
+  font-size: var(--text-label);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
-  padding: 1px 5px;
-  border: 1px solid var(--hair);
-  border-radius: 99px;
+}
+
+.row__count::before {
+  content: '· ';
 }
 
 .row__last {
@@ -464,73 +451,73 @@
   font-style: normal;
 }
 
-.row__aside {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  min-inline-size: 2.5rem;
-}
-
-.row__time {
-  font-size: 0.6875rem;
-  color: var(--ink-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.row__dot {
-  inline-size: 7px;
-  block-size: 7px;
-  border-radius: 50%;
+.row__unread {
+  padding: 1px 7px;
+  border-radius: 3px;
   background: var(--accent);
+  color: var(--accent-ink);
+  font-size: var(--text-label);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .rail__void {
   flex: 1;
   display: grid;
   place-content: center;
-  justify-items: center;
-  gap: 14px;
+  justify-items: start;
+  gap: 10px;
+  max-inline-size: 26rem;
+  margin-inline: auto;
+}
+
+.rail__void p {
+  font-size: 1.0625rem;
+}
+
+.rail__void-how {
+  font-size: 0.8125rem !important;
   color: var(--ink-faint);
+  line-height: 1.55;
 }
 
-.rail__void-go {
-  padding: 8px 16px;
-  border: 1px solid var(--hair-strong);
-  border-radius: 99px;
-  font-size: 0.8125rem;
-  color: var(--ink-soft);
-  transition:
-    border-color 0.2s ease,
-    color 0.2s ease;
-}
-
-.rail__void-go:hover {
-  border-color: var(--accent);
-  color: var(--ink);
-}
-
-.rail__hint {
+.rail__void-acts {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding-block-start: 16px;
-  font-size: 0.6875rem;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-block-start: 6px;
+}
+
+.rail__void-acts button {
+  padding: 7px 14px;
+  border: 1px solid var(--hair-strong);
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  color: var(--ink);
+  transition: border-color 0.18s ease;
+}
+
+.rail__void-acts button:hover {
+  border-color: var(--accent);
+}
+
+.rail__foot {
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--hair);
+  font-size: var(--text-label);
   color: var(--ink-faint);
-  opacity: 0.7;
 }
 
 kbd {
   font-family: var(--font);
-  font-size: 0.6875rem;
-  padding: 1px 5px;
+  font-size: var(--text-label);
+  padding: 1px 4px;
   border: 1px solid var(--hair);
-  border-radius: 5px;
+  border-radius: 3px;
   color: var(--ink-soft);
 }
 
-/* ----------------------------------------------------------------- thread */
+/* ------------------------------------------------------------------- bar */
 
 .thread {
   display: flex;
@@ -538,393 +525,382 @@ kbd {
   block-size: 100%;
 }
 
-.thread__head {
+.bar {
   position: relative;
-  z-index: 2;
-  display: flex;
-  justify-content: center;
-  padding-block: max(env(safe-area-inset-top), 14px) 10px;
-  padding-inline: var(--gutter);
-  background: color-mix(in oklab, var(--bg) 78%, transparent);
-  backdrop-filter: saturate(150%) blur(20px);
+  z-index: 3;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: max(env(safe-area-inset-top), 14px) max(var(--gutter), calc(50% - 26rem + var(--gutter)))
+    12px;
+  background: color-mix(in oklab, var(--bg) 82%, transparent);
+  backdrop-filter: saturate(140%) blur(18px);
   border-block-end: 1px solid transparent;
-  transition:
-    opacity 0.4s ease,
-    border-color 0.4s ease;
+  transition: border-color 0.3s ease;
 }
 
-/* The hairline only exists once there is something scrolled beneath it. */
-.thread__head[data-lifted] {
+.bar[data-lifted] {
   border-block-end-color: var(--hair);
 }
 
-.thread__back {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  inline-size: min(100%, var(--column));
-  padding: 6px 8px;
-  margin-inline: -8px;
-  border-radius: 14px;
-  text-align: start;
-  transition: background-color 0.18s ease;
+.bar__back {
+  inline-size: 26px;
+  block-size: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  line-height: 1;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease;
 }
 
-.thread__back:hover {
-  background: var(--veil);
+.bar__back:hover {
+  border-color: var(--hair-strong);
+  color: var(--ink);
 }
 
-.thread__who {
+.bar__who {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-inline-size: 0;
 }
 
-.thread__name {
-  font-size: var(--text-title);
+.bar__name {
+  font-size: var(--text);
   font-weight: 500;
-  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.thread__state {
-  font-size: var(--text-meta);
+.bar__state {
+  font-size: var(--text-label);
+  letter-spacing: 0.05em;
   color: var(--ink-faint);
 }
 
-.thread__caret {
-  margin-inline-start: auto;
-  font-size: 1.25rem;
-  color: var(--ink-faint);
-  opacity: 0;
-  transform: translateX(4px);
+.bar__acts {
+  display: flex;
+  gap: 6px;
+}
+
+.bar__more {
+  min-inline-size: 30px;
+  letter-spacing: 0.08em;
+}
+
+/* ------------------------------------------------------------------ menu */
+
+.menu {
+  position: absolute;
+  inset-block-start: calc(100% - 4px);
+  inset-inline-end: max(var(--gutter), calc(50% - 26rem + var(--gutter)));
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 13rem;
+  padding: 5px;
+  border: 1px solid var(--hair-strong);
+  border-radius: var(--radius-panel);
+  background: var(--veil);
+  box-shadow: var(--shadow-lift);
+  animation: settle 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.menu button {
+  padding: 8px 11px;
+  border-radius: var(--radius);
+  text-align: start;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
   transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
+    background-color 0.14s ease,
+    color 0.14s ease;
 }
 
-.thread__back:hover .thread__caret,
-.thread__back:focus-visible .thread__caret {
-  opacity: 1;
-  transform: none;
+.menu button:hover {
+  background: var(--veil-high);
+  color: var(--ink);
 }
 
-/* Writing pulls everything but the thread out of the way. */
-html[data-writing] .thread__head {
-  opacity: 0.35;
+.menu__grave:hover {
+  color: hsl(6 62% 64%);
 }
 
-html[data-writing] .rail__hint {
-  opacity: 0;
+.menu__note {
+  padding: 8px 11px 5px;
+  font-size: var(--text-label);
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  border-block-start: 1px solid var(--hair);
+  margin-block-start: 4px;
 }
+
+/* ----------------------------------------------------------------- stream */
 
 .stream {
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scroll-behavior: auto;
 }
 
-/* A short thread rests on the composer instead of hanging from the header. */
 .stream__inner {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   min-block-size: 100%;
-  inline-size: min(100%, calc(var(--column) + var(--gutter) * 2));
+  inline-size: min(100%, 52rem);
   margin-inline: auto;
-  padding-block: 18px 12px;
+  padding: 26px var(--gutter) 14px;
+}
+
+/* The spine: the axis every hour hangs from. */
+.stream__inner::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--gutter) + var(--axis) + var(--axis-gap) / 2);
+  inline-size: 1px;
+  background: var(--hair);
+  /* It fades in from above: the axis has no beginning, only a present. */
+  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000);
 }
 
 .stream__void {
-  padding-block: 22vh;
-  text-align: center;
+  display: grid;
+  gap: 6px;
+  padding-block: 18vh;
+  padding-inline-start: calc(var(--axis) + var(--axis-gap));
+  color: var(--ink-soft);
+}
+
+.stream__void span {
+  font-size: 0.8125rem;
   color: var(--ink-faint);
-  font-size: var(--text-meta);
+}
+
+/* ------------------------------------------------------------------ turn */
+
+.turn {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--axis) 1fr;
+  column-gap: var(--axis-gap);
+  padding-block: 1px;
+  touch-action: pan-y;
+  will-change: transform;
+}
+
+.turn[data-opens] {
+  margin-block-start: 14px;
+}
+
+.turn__when {
+  grid-column: 1;
+  text-align: end;
+  font-size: var(--text-label);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  padding-block-start: 2px;
+}
+
+/* One tick per utterance, sitting on the spine at its own moment. */
+.turn__tick {
+  position: absolute;
+  inset-inline-start: calc(var(--axis) + var(--axis-gap) / 2 - 3px);
+  inset-block-start: 8px;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--ink-faint);
+}
+
+.turn[data-mine] .turn__tick {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.turn:not([data-opens]) .turn__tick {
+  opacity: 0;
+}
+
+.turn__said {
+  grid-column: 2;
+  max-inline-size: var(--column);
+  min-inline-size: 0;
+}
+
+.turn__who {
+  display: block;
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: hsl(var(--hue, 250) 42% 66%);
+  margin-block-end: 3px;
+}
+
+.turn[data-mine] .turn__who {
+  color: var(--accent);
+}
+
+:root[data-theme='light'] .turn__who {
+  color: hsl(var(--hue, 250) 44% 40%);
+}
+
+.turn__text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.52;
+}
+
+.turn[data-pending] .turn__said {
+  opacity: 0.5;
+}
+
+.turn__gone {
+  font-style: italic;
+  font-size: 0.875rem;
+  color: var(--ink-faint);
+}
+
+.turn__quote {
+  display: block;
+  inline-size: 100%;
+  margin-block-end: 4px;
+  padding-inline-start: 11px;
+  border-inline-start: 2px solid var(--hair-strong);
+  text-align: start;
+}
+
+.turn__quote-who {
+  display: block;
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+}
+
+.turn__quote-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.turn__state {
+  display: flex;
+  gap: 10px;
+  margin-block-start: 3px;
+  font-size: var(--text-label);
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+}
+
+/* Present at rest, legible on approach — never a hidden gesture only. */
+.turn__acts {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: 2px;
+  display: flex;
+  gap: 12px;
+  font-size: var(--text-label);
+  letter-spacing: 0.03em;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.turn:hover .turn__acts,
+.turn:focus-within .turn__acts,
+.turn__acts[data-open] {
+  opacity: 1;
+}
+
+.turn__acts button {
+  color: var(--ink-faint);
+  transition: color 0.14s ease;
+}
+
+.turn__acts button:hover {
+  color: var(--ink);
+}
+
+.turn__acts .turn__undo:hover {
+  color: hsl(6 62% 64%);
+}
+
+.turn__cue {
+  position: absolute;
+  inset-inline-start: calc(var(--axis) + var(--axis-gap) - 22px);
+  inset-block-start: 2px;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+  opacity: var(--pull, 0);
+  pointer-events: none;
+}
+
+/* Marks on the axis: a day beginning, and a silence taking its place. */
+.daymark,
+.hush {
+  display: grid;
+  grid-template-columns: var(--axis) 1fr;
+  column-gap: var(--axis-gap);
+  align-items: center;
 }
 
 .daymark {
+  margin-block: 26px 16px;
+}
+
+.daymark span {
+  grid-column: 2;
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-block: 22px 14px;
-  padding-inline: var(--gutter);
-  color: var(--ink-faint);
-  font-size: 0.6875rem;
-  letter-spacing: 0.08em;
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
+  color: var(--ink-faint);
 }
 
-.daymark::before,
-.daymark::after {
+.daymark span::after {
   content: '';
   flex: 1;
   block-size: 1px;
   background: var(--hair);
 }
 
-/* ---------------------------------------------------------------- bubbles */
-
-.bubble-row {
-  position: relative;
-  display: flex;
-  padding-inline: var(--gutter);
-  margin-block: 1px;
-  touch-action: pan-y;
-  will-change: transform;
+.hush {
+  margin-block: 14px;
 }
 
-.bubble-row[data-opens] {
-  margin-block-start: 10px;
-}
-
-.bubble-row[data-mine] {
-  justify-content: flex-end;
-}
-
-.bubble-row__cue {
-  position: absolute;
-  inset-block: 0;
-  display: grid;
-  place-items: center;
-  inline-size: 40px;
-  color: var(--ink-faint);
-  font-size: 0.875rem;
-  opacity: var(--pull, 0);
-  pointer-events: none;
-}
-
-.bubble-row:not([data-mine]) .bubble-row__cue {
-  inset-inline-start: -8px;
-}
-
-.bubble-row[data-mine] .bubble-row__cue {
-  inset-inline-end: -8px;
-}
-
-.bubble-row__exact {
+.hush span {
+  grid-column: 2;
+  font-size: var(--text-label);
+  letter-spacing: 0.05em;
   color: var(--ink-faint);
 }
 
-.bubble {
-  position: relative;
-  max-inline-size: min(80%, 33rem);
-  padding: 8px 13px 8px;
-  border-radius: var(--radius-bubble);
-  background: var(--veil);
-  box-shadow: 0 1px 1px rgb(0 0 0 / 8%);
+.hush span::before {
+  content: '— ';
 }
 
-:root[data-theme='light'] .bubble {
-  border: 1px solid var(--hair);
-  box-shadow: none;
+.hush--live span {
+  color: var(--accent);
 }
 
-.bubble-row[data-mine] .bubble {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: transparent;
-}
-
-/* Grouped utterances share an edge, which is what makes a run read as one. */
-.bubble-row:not([data-opens]):not([data-mine]) .bubble {
-  border-start-start-radius: 7px;
-}
-
-.bubble-row:not([data-closes]):not([data-mine]) .bubble {
-  border-end-start-radius: 7px;
-}
-
-.bubble-row[data-mine]:not([data-opens]) .bubble {
-  border-start-end-radius: 7px;
-}
-
-.bubble-row[data-mine]:not([data-closes]) .bubble {
-  border-end-end-radius: 7px;
-}
-
-.bubble-row[data-pending] .bubble {
-  opacity: 0.55;
-}
-
-/* A retracted message keeps its place without keeping its weight. */
-.bubble-row[data-gone] .bubble {
-  background: none;
-  border: 1px dashed var(--hair-strong);
-  color: var(--ink-faint);
-  box-shadow: none;
-}
-
-.bubble__gone {
-  font-style: italic;
-  font-size: 0.8125rem;
-}
-
-.bubble__edited {
-  font-style: italic;
-}
-
-.bubble-row[data-held] .bubble {
-  outline: 1px solid var(--hair-strong);
-  outline-offset: 2px;
-}
-
-/* The panel hangs below its own row, so the row has to outrank the ones that
-   come after it — otherwise the next message covers the buttons. */
-.bubble-row[data-held] {
-  z-index: 4;
-}
-
-.bubble-row__held {
-  position: absolute;
-  inset-block-start: calc(100% - 2px);
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 12px;
-  border: 1px solid var(--hair-strong);
-  border-radius: 12px;
-  background: var(--veil);
-  box-shadow: var(--shadow-lift);
-  font-size: 0.75rem;
-  white-space: nowrap;
-  animation: settle 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.bubble-row:not([data-mine]) .bubble-row__held {
-  inset-inline-start: var(--gutter);
-}
-
-.bubble-row[data-mine] .bubble-row__held {
-  inset-inline-end: var(--gutter);
-}
-
-.bubble-row__held button {
-  color: var(--ink-soft);
-  transition: color 0.15s ease;
-}
-
-.bubble-row__held button:hover {
-  color: var(--ink);
-}
-
-.bubble-row__held .bubble-row__undo:hover {
-  color: hsl(4 70% 62%);
-}
-
-/* Who is speaking, said only at the top of a run and only in a group. */
-.bubble__author {
-  display: block;
-  margin-block-end: 2px;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  color: hsl(var(--hue, 250) 45% 62%);
-}
-
-.bubble-row[data-mine] .bubble__author {
-  color: color-mix(in oklab, var(--accent-ink) 75%, transparent);
-}
-
-.bubble__body {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.45;
-}
-
-.bubble__quote {
-  display: block;
-  inline-size: 100%;
-  margin-block-end: 5px;
-  padding: 5px 9px;
-  border-inline-start: 2px solid currentcolor;
-  border-radius: 5px;
-  background: rgb(128 128 160 / 12%);
-  text-align: start;
-  opacity: 0.75;
-}
-
-.bubble__quote-who {
-  display: block;
-  font-size: 0.6875rem;
-  font-weight: 500;
-}
-
-.bubble__quote-body {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: 0.75rem;
-}
-
-.bubble__meta {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  float: inline-end;
-  margin-inline-start: 10px;
-  margin-block-start: 4px;
-  font-size: 0.625rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-faint);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.bubble-row[data-mine] .bubble__meta {
-  color: color-mix(in oklab, var(--accent-ink) 72%, transparent);
-}
-
-.bubble-row[data-closes] .bubble__meta,
-.bubble-row:hover .bubble__meta {
-  opacity: 1;
-}
-
-.bubble__seen {
-  inline-size: 5px;
-  block-size: 5px;
-  border-radius: 50%;
-  border: 1px solid currentcolor;
-}
-
-.bubble__seen[data-read] {
-  background: currentcolor;
-}
-
-.breath {
-  display: flex;
-  gap: 4px;
-  padding: 12px var(--gutter);
-}
-
-.breath span {
-  inline-size: 6px;
-  block-size: 6px;
-  border-radius: 50%;
-  background: var(--ink-faint);
-  animation: breath 1.3s ease-in-out infinite;
-}
-
-.breath span:nth-child(2) {
-  animation-delay: 0.16s;
-}
-
-.breath span:nth-child(3) {
-  animation-delay: 0.32s;
-}
-
-@keyframes breath {
-  0%,
-  60%,
-  100% {
-    opacity: 0.25;
-    transform: translateY(0);
-  }
-  30% {
-    opacity: 1;
-    transform: translateY(-3px);
-  }
+.hush--live span::after {
+  content: '…';
 }
 
 /* --------------------------------------------------------------- carried */
@@ -932,23 +908,15 @@ html[data-writing] .rail__hint {
 .carried {
   position: relative;
   display: block;
-  inline-size: 100%;
-  border-radius: 12px;
+  max-inline-size: 22rem;
+  margin-block: 4px 5px;
+  border-radius: var(--radius);
   overflow: hidden;
-}
-
-/* A picture with nothing written on it is the bubble, not a thing inside it. */
-.bubble-row[data-wordless] .bubble {
-  padding: 4px;
-}
-
-.bubble-row[data-carrying] .bubble {
-  max-inline-size: min(78%, 22rem);
 }
 
 .carried--image {
   background: var(--veil-high);
-  max-block-size: 60vh;
+  max-block-size: 58vh;
   cursor: zoom-in;
 }
 
@@ -968,35 +936,33 @@ html[data-writing] .rail__hint {
 
 .carried__waiting::before {
   content: '';
-  inline-size: 6px;
-  block-size: 6px;
-  border-radius: 50%;
+  inline-size: 5px;
+  block-size: 5px;
   background: var(--ink-faint);
   animation: waking 1.6s ease-in-out infinite;
 }
 
 .carried__lost {
   position: absolute;
-  inset-block-end: 8px;
+  inset-block-end: 6px;
   inset-inline-start: 8px;
-  font-size: 0.6875rem;
+  font-size: var(--text-label);
   color: var(--ink-faint);
 }
 
-/* The upload, drawn along the bottom edge of its own picture. */
 .carried__progress {
   position: absolute;
   inset-block-end: 0;
   inset-inline: 0;
-  block-size: 3px;
-  background: rgb(0 0 0 / 25%);
+  block-size: 2px;
+  background: rgb(0 0 0 / 30%);
 }
 
 .carried__progress span {
   display: block;
   block-size: 100%;
   inline-size: calc(var(--done, 0) * 100%);
-  background: var(--accent-ink);
+  background: var(--accent);
   transition: inline-size 0.2s ease;
 }
 
@@ -1004,32 +970,27 @@ html[data-writing] .rail__hint {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 9px 11px;
-  margin-block-end: 2px;
-  border: 1px solid var(--hair-strong);
-  border-radius: 12px;
+  padding: 8px 11px;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius);
   text-align: start;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.18s ease;
 }
 
 .carried--file:hover:not(:disabled) {
   border-color: var(--accent);
 }
 
-.bubble-row[data-mine] .carried--file {
-  border-color: color-mix(in oklab, var(--accent-ink) 35%, transparent);
-}
-
 .carried__glyph {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  inline-size: 30px;
-  block-size: 30px;
-  border-radius: 50%;
-  border: 1px solid currentcolor;
-  font-size: 0.875rem;
-  opacity: 0.7;
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: 3px;
+  border: 1px solid var(--hair-strong);
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
 }
 
 .carried__about {
@@ -1046,8 +1007,8 @@ html[data-writing] .rail__hint {
 }
 
 .carried__size {
-  font-size: 0.6875rem;
-  opacity: 0.65;
+  font-size: var(--text-label);
+  color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1061,8 +1022,8 @@ html[data-writing] .rail__hint {
   grid-template-rows: 1fr auto;
   place-items: center;
   gap: 14px;
-  padding: max(4vh, 24px) var(--gutter);
-  background: color-mix(in oklab, #05050a 88%, transparent);
+  padding: max(4vh, 22px) var(--gutter);
+  background: color-mix(in oklab, #05050a 90%, transparent);
   backdrop-filter: blur(8px);
 }
 
@@ -1078,17 +1039,17 @@ html[data-writing] .rail__hint {
   max-inline-size: 100%;
   max-block-size: 100%;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
 .lightbox__foot {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   max-inline-size: 100%;
-  padding: 8px 14px;
-  border-radius: 99px;
-  background: rgb(255 255 255 / 8%);
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  background: rgb(255 255 255 / 9%);
   font-size: 0.8125rem;
   color: rgb(255 255 255 / 88%);
 }
@@ -1106,41 +1067,35 @@ html[data-writing] .rail__hint {
 
 .lightbox__foot button {
   color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  border-block-end: 1px solid rgb(255 255 255 / 35%);
 }
 
 /* --------------------------------------------------------------- composer */
 
 .composer {
-  inline-size: min(100%, calc(var(--column) + var(--gutter) * 2));
+  position: relative;
+  inline-size: min(100%, 52rem);
   margin-inline: auto;
-  padding: 8px var(--gutter) max(env(safe-area-inset-bottom), 14px);
+  padding: 10px var(--gutter) max(env(safe-area-inset-bottom), 16px);
 }
 
 .composer__reply {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--axis) 1fr auto;
+  column-gap: var(--axis-gap);
   align-items: center;
-  gap: 9px;
-  margin-block-end: 7px;
-  padding: 7px 11px;
-  border-radius: 11px;
-  background: var(--veil);
+  margin-block-end: 8px;
   font-size: 0.8125rem;
   color: var(--ink-soft);
-  animation: settle 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: settle 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .composer__reply-mark {
+  text-align: end;
   color: var(--accent);
 }
 
-.composer[data-editing] .composer__line {
-  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
-}
-
 .composer__reply-body {
-  flex: 1;
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1149,96 +1104,59 @@ html[data-writing] .rail__hint {
 
 .composer__reply-drop {
   color: var(--ink-faint);
-  font-size: 1.125rem;
+  font-size: 1rem;
   line-height: 1;
-  padding: 0 2px;
 }
 
+/* Aligned on the same axis: your own line continues the conversation's grid. */
 .composer__line {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 7px 8px 7px 15px;
-  border: 1px solid var(--hair);
-  border-radius: var(--radius-panel);
-  background: var(--veil);
-  transition: border-color 0.25s ease;
-}
-
-.composer__line:focus-within {
-  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+  display: grid;
+  grid-template-columns: var(--axis) 1fr auto auto;
+  column-gap: var(--axis-gap);
+  align-items: end;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--hair);
 }
 
 .composer__picker {
   display: none;
 }
 
-/* Nothing at rest: the clip only surfaces once the composer is in use. */
-.composer__clip {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  inline-size: 30px;
-  block-size: 30px;
-  margin-inline-start: -6px;
-  border-radius: 50%;
-  color: var(--ink-faint);
-  opacity: 0;
-  transform: scale(0.7);
-  pointer-events: none;
+.composer__clip,
+.composer__send {
+  align-self: end;
+  margin-block-end: 2px;
+  font-size: var(--text-meta);
   transition:
-    opacity 0.2s ease,
-    transform 0.2s ease,
-    color 0.15s ease;
+    color 0.16s ease,
+    filter 0.18s ease;
 }
 
-.composer:hover .composer__clip,
-.composer__line:focus-within .composer__clip {
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
+.composer__clip {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: end;
+  color: var(--ink-faint);
 }
 
-.composer__clip:hover {
+.composer__clip:hover:not(:disabled) {
   color: var(--ink);
 }
 
 .composer__clip:disabled {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.composer[data-hovering] .composer__line {
-  border-color: var(--accent);
-  border-style: dashed;
-}
-
-.composer__catch {
-  position: absolute;
-  inset-block-end: calc(100% + 6px);
-  inset-inline: var(--gutter);
-  padding: 10px;
-  border: 1px dashed var(--accent);
-  border-radius: var(--radius-panel);
-  background: color-mix(in oklab, var(--bg) 88%, transparent);
-  text-align: center;
-  font-size: 0.8125rem;
-  color: var(--ink-soft);
-  pointer-events: none;
-}
-
-.composer {
-  position: relative;
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .composer__input {
-  flex: 1;
+  grid-column: 2;
   min-inline-size: 0;
   max-block-size: 168px;
-  padding-block: 7px;
+  padding-block: 0 2px;
   outline: none;
   overflow-y: auto;
-  line-height: 1.45;
+  line-height: 1.52;
+  background: none;
 }
 
 .composer__input::placeholder {
@@ -1246,30 +1164,48 @@ html[data-writing] .rail__hint {
 }
 
 .composer__send {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  inline-size: 34px;
-  block-size: 34px;
-  border-radius: 50%;
+  padding: 5px 13px;
+  border-radius: var(--radius);
   background: var(--accent);
   color: var(--accent-ink);
-  opacity: 0;
-  will-change: transform, opacity;
+  font-weight: 600;
 }
 
-/* Reading mode: the thread and nothing else. */
-.thread[data-reading] .thread__head {
+.composer__send:disabled {
+  cursor: default;
+}
+
+.composer[data-hovering] .composer__line {
+  border-block-start-color: var(--accent);
+}
+
+.composer__catch {
+  position: absolute;
+  inset-block-end: calc(100% + 4px);
+  inset-inline: var(--gutter);
+  padding: 10px;
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--bg) 90%, transparent);
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+
+/* Reading mode: the words, and as little else as can be managed. */
+.thread[data-reading] .bar {
   opacity: 0;
   pointer-events: none;
 }
 
 .thread[data-reading] .stream__inner,
 .thread[data-reading] .composer {
-  --column: 34rem;
+  --axis: 3.5rem;
+  --column: 30rem;
 }
 
-.thread[data-reading] .bubble__body {
+.thread[data-reading] .turn__text {
   font-size: 1.0625rem;
   line-height: 1.62;
 }
@@ -1286,7 +1222,7 @@ html[data-writing] .rail__hint {
   will-change: transform;
 }
 
-.flight .sigil {
+.flight .mark {
   inline-size: 100%;
   block-size: 100%;
 }
@@ -1300,13 +1236,13 @@ html[data-writing] .rail__hint {
   display: grid;
   justify-items: center;
   align-content: start;
-  padding: max(12vh, 60px) var(--gutter) var(--gutter);
-  background: color-mix(in oklab, var(--bg) 62%, transparent);
-  backdrop-filter: blur(14px) saturate(140%);
+  padding: max(11vh, 56px) var(--gutter) var(--gutter);
+  background: color-mix(in oklab, var(--bg) 66%, transparent);
+  backdrop-filter: blur(12px) saturate(130%);
 }
 
 .cursor__panel {
-  inline-size: min(100%, 32rem);
+  inline-size: min(100%, 31rem);
   max-block-size: min(60vh, 30rem);
   display: flex;
   flex-direction: column;
@@ -1323,9 +1259,9 @@ html[data-writing] .rail__hint {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 20px 0;
-  font-size: 0.6875rem;
-  letter-spacing: 0.08em;
+  padding: 11px 18px 0;
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--ink-faint);
 }
@@ -1335,8 +1271,8 @@ html[data-writing] .rail__hint {
 }
 
 .cursor__field {
-  padding: 17px 20px;
-  font-size: 1rem;
+  padding: 16px 18px;
+  font-size: 0.9375rem;
   outline: none;
   border-block-end: 1px solid var(--hair);
 }
@@ -1351,14 +1287,14 @@ html[data-writing] .rail__hint {
 
 .cursor__list {
   overflow-y: auto;
-  padding: 6px;
+  padding: 5px;
 }
 
 .cursor__group {
   display: block;
-  padding: 12px 12px 5px;
-  font-size: 0.625rem;
-  letter-spacing: 0.1em;
+  padding: 11px 12px 4px;
+  font-size: var(--text-label);
+  letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--ink-faint);
 }
@@ -1367,8 +1303,8 @@ html[data-writing] .rail__hint {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
-  border-radius: 11px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
@@ -1379,9 +1315,9 @@ html[data-writing] .rail__hint {
 .cursor__glyph {
   display: grid;
   place-items: center;
-  inline-size: 26px;
-  block-size: 26px;
-  border-radius: 8px;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 3px;
   background: var(--veil-high);
   color: var(--ink-faint);
   font-size: 0.75rem;
@@ -1402,16 +1338,16 @@ html[data-writing] .rail__hint {
 
 .cursor__hint {
   flex: 0 0 auto;
-  max-inline-size: 40%;
+  max-inline-size: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.75rem;
+  font-size: var(--text-meta);
   color: var(--ink-faint);
 }
 
 .cursor__none {
-  padding: 22px;
+  padding: 20px;
   text-align: center;
   font-size: 0.8125rem;
   color: var(--ink-faint);
@@ -1422,31 +1358,39 @@ html[data-writing] .rail__hint {
 .notice {
   position: fixed;
   inset-inline-start: 50%;
-  inset-block-end: calc(max(env(safe-area-inset-bottom), 18px) + 68px);
+  inset-block-end: max(env(safe-area-inset-bottom), 16px);
   z-index: 60;
   max-inline-size: calc(100vw - var(--gutter) * 2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 9px 16px;
+  padding: 8px 14px;
   border: 1px solid var(--hair-strong);
-  border-radius: 99px;
+  border-radius: var(--radius);
   background: var(--veil);
   box-shadow: var(--shadow-lift);
   font-size: 0.8125rem;
   color: var(--ink-soft);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
   will-change: transform, opacity;
 }
 
 /* ------------------------------------------------------------------ small */
 
-@media (max-width: 640px) {
-  .bubble {
-    max-inline-size: 84%;
+@media (max-width: 680px) {
+  :root {
+    --axis: 3.25rem;
+    --axis-gap: 14px;
   }
 
-  .cursor {
-    padding-block-start: 8vh;
+  .turn__acts {
+    position: static;
+    opacity: 1;
+    grid-column: 2;
+    margin-block-start: 5px;
+  }
+
+  .rail__head {
+    align-items: flex-start;
   }
 }

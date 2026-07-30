@@ -40,6 +40,7 @@ const fits = (haystack: string, needle: string) =>
  */
 export function Cursor() {
   const shown = useStore((s) => s.cursor)
+  const seed = useStore((s) => s.cursorSeed)
   const setCursor = useStore((s) => s.setCursor)
   const conversations = useStore((s) => s.conversations)
   const enter = useStore((s) => s.enter)
@@ -112,11 +113,13 @@ export function Cursor() {
       setAnswers([])
       return
     }
+    // Opened from a menu, it can arrive already pointed at what was chosen.
+    setQuery(seed)
     void loadBlocked()
     void refreshPush()
     const id = requestAnimationFrame(() => field.current?.focus())
     return () => cancelAnimationFrame(id)
-  }, [shown, loadBlocked, refreshPush])
+  }, [shown, seed, loadBlocked, refreshPush])
 
   // Remote lookups are debounced; local matches are instant.
   useEffect(() => {

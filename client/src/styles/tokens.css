@@ -1,28 +1,31 @@
 /*
  * Kairus design tokens.
  *
- * One accent colour, used only for what you wrote yourself and for focus.
- * Everything else is monochrome, so the eye has exactly one place to land.
+ * The palette is warm and almost monochrome: a near-black ground, an off-white
+ * ink, and a single gold that marks one thing only — what you said yourself.
+ * No blue, no violet, no rounded speech bubbles: those belong to every other
+ * messenger, and borrowing them would say "copy" before a word is read.
  */
 
 :root {
   color-scheme: dark;
 
-  --bg: #0a0a0d;
-  --veil: #141419;
-  --veil-high: #1b1b22;
-  --ink: #f0f0f4;
-  --ink-soft: #9b9ba8;
-  --ink-faint: #5d5d6b;
+  --bg: #0a0a0c;
+  --veil: #121215;
+  --veil-high: #191920;
+  --ink: #ecedf1;
+  --ink-soft: #9a9ba6;
+  --ink-faint: #5b5c68;
   --hair: rgb(255 255 255 / 8%);
-  --hair-strong: rgb(255 255 255 / 14%);
+  --hair-strong: rgb(255 255 255 / 15%);
 
-  --accent: #6a5af9;
-  --accent-ink: #f4f2ff;
-  --accent-glow: rgb(106 90 249 / 32%);
+  /* Gold, not blue. Used for your own voice and for focus, nothing else. */
+  --accent: #c8a24a;
+  --accent-ink: #17130a;
+  --accent-soft: rgb(200 162 74 / 14%);
 
-  --shadow-lift: 0 1px 2px rgb(0 0 0 / 30%), 0 12px 40px -12px rgb(0 0 0 / 60%);
-  --shadow-float: 0 24px 70px -20px rgb(0 0 0 / 75%);
+  --shadow-lift: 0 1px 2px rgb(0 0 0 / 34%), 0 14px 44px -14px rgb(0 0 0 / 62%);
+  --shadow-float: 0 26px 74px -22px rgb(0 0 0 / 78%);
 
   --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Inter,
     'Helvetica Neue', Arial, sans-serif;
@@ -30,34 +33,39 @@
 
   --text: 0.9375rem;
   --text-meta: 0.75rem;
-  --text-title: 1rem;
-  --tracking: -0.011em;
+  --text-label: 0.6875rem;
+  --tracking: -0.008em;
+  /* Small caps labels carry the structure: names, days, states. */
+  --tracking-label: 0.14em;
 
-  --unit: 4px;
-  --gutter: clamp(16px, 4vw, 28px);
-  --column: 41rem;
+  --gutter: clamp(18px, 4vw, 34px);
+  --column: 34rem;
+  /* The time axis: one width, shared by the list and the thread. */
+  --axis: 5.25rem;
+  --axis-gap: clamp(18px, 3vw, 34px);
 
-  --radius-bubble: 18px;
-  --radius-panel: 20px;
-  --radius-field: 14px;
+  /* Corners are small and consistent — nothing is pill-shaped. */
+  --radius: 6px;
+  --radius-panel: 10px;
+  --radius-mark: 5px;
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --bg: #fbfbfc;
+  --bg: #faf9f6;
   --veil: #ffffff;
-  --veil-high: #f2f2f5;
-  --ink: #15151a;
-  --ink-soft: #62626f;
-  --ink-faint: #9797a4;
-  --hair: rgb(16 16 24 / 9%);
-  --hair-strong: rgb(16 16 24 / 16%);
+  --veil-high: #f1efe9;
+  --ink: #17161a;
+  --ink-soft: #5f5d63;
+  --ink-faint: #93909a;
+  --hair: rgb(20 18 24 / 11%);
+  --hair-strong: rgb(20 18 24 / 20%);
 
-  --accent: #5749ea;
-  --accent-ink: #ffffff;
-  --accent-glow: rgb(87 73 234 / 22%);
+  --accent: #8a6a1c;
+  --accent-ink: #fffdf6;
+  --accent-soft: rgb(138 106 28 / 12%);
 
-  --shadow-lift: 0 1px 2px rgb(16 16 24 / 6%), 0 12px 32px -14px rgb(16 16 24 / 22%);
-  --shadow-float: 0 24px 64px -22px rgb(16 16 24 / 30%);
+  --shadow-lift: 0 1px 2px rgb(20 18 24 / 6%), 0 14px 34px -16px rgb(20 18 24 / 24%);
+  --shadow-float: 0 26px 66px -24px rgb(20 18 24 / 32%);
 }

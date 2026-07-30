@@ -5,25 +5,29 @@ type Props = {
   /** Anything with a name and a colour: a person, or a group. */
   user: Face
   size?: number
-  /** A slow pulse when the other person is here. */
+  /** Whether anyone is there. Stated, not merely implied by a glow. */
   present?: boolean
-  /** The pulse quickens while they write. */
-  stirring?: boolean
   innerRef?: Ref<HTMLSpanElement>
   hidden?: boolean
 }
 
-const initial = (name: string) => {
-  const trimmed = name.trim()
-  if (!trimmed) return '·'
-  return [...trimmed][0]?.toUpperCase() ?? '·'
+/** Up to two letters, so a group named "Hut 8" reads as H8 rather than H. */
+function letters(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return '·'
+  const first = [...(words[0] ?? '')][0] ?? ''
+  const second = words.length > 1 ? ([...(words[1] ?? '')][0] ?? '') : ''
+  return (first + second).toUpperCase()
 }
 
 /**
- * A person, rendered as a single mark. The colour is derived from the handle
- * on the server, so an identity always wears the same face.
+ * A person or a group, rendered as a mark.
+ *
+ * Square, not round: the circular avatar is the single most recognisable
+ * borrowed gesture in messaging, and Kairus does not borrow it. The colour is
+ * derived on the server, so an identity always wears the same one.
  */
-export function Sigil({ user, size = 40, present, stirring, innerRef, hidden }: Props) {
+export function Sigil({ user, size = 34, present, innerRef, hidden }: Props) {
   const style = {
     '--hue': user.hue,
     '--size': `${size}px`,
@@ -33,13 +37,12 @@ export function Sigil({ user, size = 40, present, stirring, innerRef, hidden }: 
   return (
     <span
       ref={innerRef}
-      className="sigil"
+      className="mark"
       style={style}
       data-present={present || undefined}
-      data-stirring={stirring || undefined}
       aria-hidden="true"
     >
-      <span className="sigil__face">{initial(user.name)}</span>
+      {letters(user.name)}
     </span>
   )
 }

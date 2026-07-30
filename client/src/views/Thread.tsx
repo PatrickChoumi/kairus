@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Ref } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Ref,
+} from 'react'
 import { useStore, useThread } from '../state/store'
 import { Sigil } from '../ui/Sigil'
-import { Bubble } from './Bubble'
+import { Turn } from './Turn'
 import { Composer } from './Composer'
 import { Lightbox } from './Lightbox'
-import { dayLabel, sameBreath, sameDay } from '../lib/time'
+import { Menu } from './Menu'
+import { dayLabel, sameBreath, sameDay, silence } from '../lib/time'
 import type { Attachment, Conversation } from '../net/types'
 
 type Props = {
@@ -21,7 +29,7 @@ function presence(conversation: Conversation, online: number, typing: boolean): 
   if (typing) return 'écrit…'
   if (conversation.kind === 'group') {
     const total = conversation.members.length + 1
-    return online > 0 ? `${online} sur ${total} · là` : `${total} personnes`
+    return online > 0 ? `${total} personnes · ${online} là` : `${total} personnes`
   }
   return online > 0 ? 'là' : `@${conversation.members[0]?.handle ?? ''}`
 }
@@ -36,11 +44,13 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   const setReply = useStore((s) => s.reply)
   const setEdit = useStore((s) => s.edit)
   const retract = useStore((s) => s.retract)
+  const setCursor = useStore((s) => s.setCursor)
 
   const stream = useRef<HTMLDivElement>(null)
   const wasNearBottom = useRef(true)
   const lastCount = useRef(0)
   const lastId = useRef<string | null>(null)
+  const [menu, setMenu] = useState(false)
 
   useLayoutEffect(() => {
     const el = stream.current
@@ -91,41 +101,59 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
 
   if (!me) return null
 
-  const byId = new Map(messages.map((m) => [m.id, m]))
   const nameOf = (id: string): string =>
     id === me.id ? 'vous' : (conversation.members.find((m) => m.id === id)?.name ?? 'quelqu’un')
   const hueOf = (id: string): number | null =>
-    conversation.members.find((m) => m.id === id)?.hue ?? null
+    id === me.id ? null : (conversation.members.find((m) => m.id === id)?.hue ?? null)
+
+  const byId = new Map(messages.map((m) => [m.id, m]))
   const lastMine = [...messages]
     .reverse()
     .find((m) => m.senderId === me.id && !m.pending && !m.deletedAt)
 
   return (
     <div className="thread" data-reading={reading || undefined}>
-      <header className="thread__head" ref={head}>
-        <button className="thread__back" onClick={onLeave} aria-label="revenir">
-          <Sigil
-            user={conversation.face}
-            size={38}
-            present={online > 0}
-            stirring={typing}
-            innerRef={headSigil}
-            hidden={sigilHidden}
-          />
-          <span className="thread__who">
-            <span className="thread__name">{conversation.face.name}</span>
-            <span className="thread__state">{presence(conversation, online, typing)}</span>
-          </span>
-          <span className="thread__caret" aria-hidden="true">
-            ‹
-          </span>
+      <header className="bar" ref={head}>
+        <button className="bar__back" onClick={onLeave} aria-label="revenir à la liste">
+          ‹
         </button>
+
+        <Sigil
+          user={conversation.face}
+          size={30}
+          present={online > 0}
+          innerRef={headSigil}
+          hidden={sigilHidden}
+        />
+
+        <span className="bar__who">
+          <span className="bar__name">{conversation.face.name}</span>
+          <span className="bar__state">{presence(conversation, online, typing)}</span>
+        </span>
+
+        <div className="bar__acts">
+          <button onClick={() => setCursor(true)}>chercher</button>
+          <button
+            className="bar__more"
+            data-menu-toggle
+            onClick={() => setMenu((m) => !m)}
+            aria-label="options de la conversation"
+            aria-expanded={menu}
+          >
+            ···
+          </button>
+        </div>
+
+        {menu && <Menu conversation={conversation} onClose={() => setMenu(false)} />}
       </header>
 
       <div className="stream" ref={stream} onScroll={onScroll}>
         <div className="stream__inner">
           {messages.length === 0 && (
-            <p className="stream__void">Rien n’a encore été dit.</p>
+            <p className="stream__void">
+              Rien n’a encore été dit.
+              <span>Écrivez la première ligne.</span>
+            </p>
           )}
 
           {messages.map((message, index) => {
@@ -145,6 +173,10 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
               !sameBreath(message.createdAt, next.createdAt) ||
               !sameDay(message.createdAt, next.createdAt)
 
+            // A silence takes up room, because on this axis time is distance.
+            const pause =
+              previous && !opensDay ? silence(previous.createdAt, message.createdAt) : null
+
             const quoted = message.replyTo ? (byId.get(message.replyTo) ?? null) : null
 
             return (
@@ -154,21 +186,20 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
                     <span>{dayLabel(message.createdAt)}</span>
                   </div>
                 )}
-                <Bubble
+                {pause && (
+                  <div className="hush">
+                    <span>{pause}</span>
+                  </div>
+                )}
+                <Turn
                   message={message}
                   mine={mine}
                   opens={opens}
                   closes={closes}
+                  author={nameOf(message.senderId)}
+                  authorHue={hueOf(message.senderId)}
                   quoted={quoted}
                   quotedAuthor={quoted ? nameOf(quoted.senderId) : null}
-                  author={
-                    // In a group you need to know who is speaking; in a
-                    // conversation with one other person you already do.
-                    conversation.kind === 'group' && !mine && opens
-                      ? nameOf(message.senderId)
-                      : null
-                  }
-                  authorHue={hueOf(message.senderId)}
                   read={
                     mine && message.id === lastMine?.id && conversation.readAt >= message.createdAt
                   }
@@ -182,10 +213,8 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
           })}
 
           {typing && (
-            <div className="breath" aria-live="polite" aria-label="écrit">
-              <span />
-              <span />
-              <span />
+            <div className="hush hush--live" aria-live="polite">
+              <span>{conversation.face.name} écrit</span>
             </div>
           )}
         </div>
