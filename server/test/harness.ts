@@ -101,6 +101,7 @@ export function wipe(): void {
   db.exec(`
     DELETE FROM push_subscriptions;
     DELETE FROM blocks;
+    DELETE FROM pins;
     DELETE FROM messages;
     DELETE FROM participants;
     DELETE FROM conversations;

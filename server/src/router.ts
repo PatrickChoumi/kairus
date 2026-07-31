@@ -15,15 +15,19 @@ import {
   findUserByHandle,
   findMessageConversation,
   findUserRow,
+  forwardMessage,
   isBlocked,
   isHandle,
   isParticipant,
   listBlocked,
+  listPins,
+  MAX_PINS,
   participantIds,
   listConversations,
   listMessages,
   markRead,
   openConversation,
+  pinMessage,
   publicUser,
   removeMember,
   renameConversation,
@@ -32,10 +36,12 @@ import {
   retractMessage,
   reviseMessage,
   revokeSessions,
+  saveDraft,
   searchMessages,
   searchUsers,
   tokenVersionOf,
   unblockUser,
+  unpinMessage,
   verifyPassword,
   verifyRecoveryPhrase,
   type Revision,
@@ -53,6 +59,7 @@ import { asPrometheus, count, log, snapshot } from './log.js'
 import {
   attachmentOf,
   claim,
+  duplicate,
   findAttachment,
   isDisplayable,
   MAX_BYTES,
@@ -183,6 +190,23 @@ const refusals: Record<string, [number, string]> = {
   empty: [400, 'un message ne peut pas être vide'],
 }
 
+const forwardRefusals: Record<string, [number, string]> = {
+  missing: [404, 'ce message n’existe plus'],
+  // Not being able to read the source is told the same way as it not existing.
+  'not-yours': [404, 'ce message n’existe plus'],
+  retracted: [409, 'ce message a été retiré'],
+  nowhere: [404, 'cette conversation n’existe pas'],
+  closed: [403, 'cette conversation est fermée'],
+  empty: [400, 'il n’y a rien à transférer'],
+}
+
+const pinRefusals: Record<string, [number, string]> = {
+  missing: [404, 'ce message n’existe plus'],
+  'not-yours': [404, 'cette conversation n’existe pas'],
+  retracted: [409, 'ce message a été retiré'],
+  'too-many': [409, `on ne peut pas épingler plus de ${MAX_PINS} messages`],
+}
+
 const unwrap = (revision: Revision) => {
   if (revision.ok) return revision.message
   const [status, message] = refusals[revision.reason] ?? [400, 'impossible']
@@ -271,6 +295,55 @@ const authed: Record<string, Handler> = {
     const message = unwrap(retractMessage(field(body, 'message'), userId))
     hub.broadcastRevision(message)
     return { message }
+  },
+
+  'POST /api/messages/forward': ({ userId, body }) => {
+    spend(limits.write, userId, 'trop de transferts d’un coup')
+    const result = forwardMessage(
+      field(body, 'message'),
+      field(body, 'conversation'),
+      userId,
+      duplicate,
+    )
+    if (!result.ok) {
+      const [status, message] = forwardRefusals[result.reason] ?? [400, 'impossible']
+      throw new HttpError(status, message)
+    }
+    hub.broadcastMessage(result.message)
+    return { message: result.message }
+  },
+
+  /* -- pins --------------------------------------------------------------- */
+
+  'POST /api/pins': ({ userId, body }) => {
+    spend(limits.write, userId, 'trop d’épinglages d’un coup')
+    const conversationId = field(body, 'conversation')
+    const messageId = field(body, 'message')
+    const wanted = (body as Record<string, unknown> | null)?.pinned !== false
+
+    const result = wanted
+      ? pinMessage(conversationId, messageId, userId)
+      : unpinMessage(conversationId, messageId, userId)
+    if (!result.ok) {
+      const [status, message] = pinRefusals[result.reason] ?? [400, 'impossible']
+      throw new HttpError(status, message)
+    }
+    hub.broadcastPins(conversationId)
+    return { pins: listPins(conversationId, userId) }
+  },
+
+  /* -- drafts ------------------------------------------------------------- */
+
+  'POST /api/drafts': ({ userId, body }) => {
+    spend(limits.sketch, userId, 'trop de brouillons d’un coup')
+    const conversationId = field(body, 'conversation')
+    if (!isParticipant(conversationId, userId)) {
+      throw new HttpError(404, 'cette conversation n’existe pas')
+    }
+    const text = field(body, 'body')
+    const at = saveDraft(conversationId, userId, text)
+    hub.broadcastDraft(userId, conversationId, text.slice(0, 4000), at)
+    return { at }
   },
 
   'POST /api/read': ({ userId, body }) => {

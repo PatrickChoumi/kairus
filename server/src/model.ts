@@ -21,6 +21,12 @@ export type Message = {
   deletedAt: number | null
   /** A file travelling with the message, if any. */
   attachment: Attachment | null
+  /**
+   * Where these words came from, when they are not this sender's own. It
+   * credits the *first* author, not the person you got it from: forwarding a
+   * forward carries the origin along rather than stacking attributions.
+   */
+  forwarded: { from: Face; at: number } | null
 }
 
 /** What a conversation shows as: a person for a direct one, a name for a group. */
@@ -39,6 +45,10 @@ export type Conversation = {
    * them, so a single mark means "all of them", never "one of them".
    */
   readAt: number
+  /** What this conversation keeps at the top, most recently pinned first. */
+  pins: Message[]
+  /** What you had started writing here, from whichever device you left it on. */
+  draft: string
 }
 
 type UserRow = User & {
@@ -57,9 +67,15 @@ type MessageRow = {
   created_at: number
   edited_at: number | null
   deleted_at: number | null
+  forwarded_from: string | null
+  forwarded_at: number | null
 }
 
-const toMessage = (r: MessageRow, attachment: Attachment | null = null): Message => ({
+const toMessage = (
+  r: MessageRow,
+  attachment: Attachment | null = null,
+  origin: Face | null = null,
+): Message => ({
   id: r.id,
   conversationId: r.conversation_id,
   senderId: r.sender_id,
@@ -69,12 +85,35 @@ const toMessage = (r: MessageRow, attachment: Attachment | null = null): Message
   editedAt: r.edited_at,
   deletedAt: r.deleted_at,
   attachment,
+  forwarded:
+    origin && r.forwarded_at !== null ? { from: origin, at: r.forwarded_at } : null,
 })
 
-/** Fills in the files for a batch, in one query rather than one per message. */
+/** Who a forwarded message credits — nothing at all for a message of one's own. */
+function originOf(row: MessageRow): Face | null {
+  if (!row.forwarded_from) return null
+  const from = findUser(row.forwarded_from)
+  return from ? { id: from.id, name: from.name, hue: from.hue } : null
+}
+
+/**
+ * Fills in the files and the forward origins for a batch, in a query each
+ * rather than a query per message.
+ */
 const withAttachments = (rows: MessageRow[]): Message[] => {
   const files = attachmentsOf(rows.map((r) => r.id))
-  return rows.map((row) => toMessage(row, files.get(row.id) ?? null))
+  const authors = new Map<string, Face>()
+  for (const id of new Set(rows.map((r) => r.forwarded_from).filter(Boolean) as string[])) {
+    const user = findUser(id)
+    if (user) authors.set(id, { id: user.id, name: user.name, hue: user.hue })
+  }
+  return rows.map((row) =>
+    toMessage(
+      row,
+      files.get(row.id) ?? null,
+      row.forwarded_from ? (authors.get(row.forwarded_from) ?? null) : null,
+    ),
+  )
 }
 
 /** The shape of a user that is safe to hand to anyone. */
@@ -493,9 +532,12 @@ export function describeConversation(id: string, viewerId: string): Conversation
 
   const mine = db
     .prepare(
-      `SELECT last_read_at, joined_at FROM participants WHERE conversation_id = ? AND user_id = ?`,
+      `SELECT last_read_at, joined_at, draft FROM participants
+       WHERE conversation_id = ? AND user_id = ?`,
     )
-    .get(id, viewerId) as { last_read_at: number; joined_at: number } | undefined
+    .get(id, viewerId) as
+    | { last_read_at: number; joined_at: number; draft: string }
+    | undefined
   const since = mine?.joined_at ?? 0
 
   const last = db
@@ -527,9 +569,11 @@ export function describeConversation(id: string, viewerId: string): Conversation
     kind: row.kind,
     face: { id: face.id, name: face.name, hue: face.hue },
     members,
-    lastMessage: last ? toMessage(last, attachmentOf(last.id)) : null,
+    lastMessage: last ? toMessage(last, attachmentOf(last.id), originOf(last)) : null,
     unread: unread.n,
     readAt: others.at ?? mine?.last_read_at ?? 0,
+    pins: listPins(id, viewerId),
+    draft: mine?.draft ?? '',
   }
 }
 
@@ -561,6 +605,7 @@ export function addMessage(
   body: string,
   replyTo: string | null,
   attachment: Attachment | null = null,
+  forwarded: { from: Face; at: number } | null = null,
 ): Message {
   const message: Message = {
     id: randomUUID(),
@@ -572,10 +617,12 @@ export function addMessage(
     editedAt: null,
     deletedAt: null,
     attachment,
+    forwarded,
   }
   db.prepare(
-    `INSERT INTO messages (id, conversation_id, sender_id, body, reply_to, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO messages
+       (id, conversation_id, sender_id, body, reply_to, created_at, forwarded_from, forwarded_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     message.id,
     message.conversationId,
@@ -583,6 +630,8 @@ export function addMessage(
     message.body,
     message.replyTo,
     message.createdAt,
+    forwarded?.from.id ?? null,
+    forwarded?.at ?? null,
   )
   return message
 }
@@ -597,7 +646,7 @@ export function findMessageConversation(id: string): string | null {
 
 export function findMessage(id: string): Message | undefined {
   const row = db.prepare(`SELECT * FROM messages WHERE id = ?`).get(id) as MessageRow | undefined
-  return row ? toMessage(row, attachmentOf(id)) : undefined
+  return row ? toMessage(row, attachmentOf(id), originOf(row)) : undefined
 }
 
 export type Revision = { ok: true; message: Message } | { ok: false; reason: RevisionRefusal }
@@ -631,7 +680,9 @@ export function retractMessage(id: string, userId: string): Revision {
 
   const deletedAt = Date.now()
   db.prepare(`UPDATE messages SET body = '', deleted_at = ? WHERE id = ?`).run(deletedAt, id)
-  // Taking a message back has to take its file with it, off the disk.
+  // Taking a message back has to take its file with it, off the disk — and
+  // leave nothing pinned at the top of the conversation pointing at a hole.
+  db.prepare(`DELETE FROM pins WHERE message_id = ?`).run(id)
   eraseFor(id)
   return { ok: true, message: { ...existing, body: '', deletedAt, attachment: null } }
 }
@@ -656,6 +707,150 @@ export function listMessages(
     ) as MessageRow[]
   return withAttachments(rows.reverse())
 }
+
+/* ------------------------------------------------------------ forwarding */
+
+export type ForwardRefusal =
+  | 'missing'
+  | 'not-yours'
+  | 'retracted'
+  | 'nowhere'
+  | 'closed'
+  | 'empty'
+
+/**
+ * Sends someone else's words on to another conversation.
+ *
+ * Two rules make this safe. You must be able to *read* the source — being a
+ * participant is not enough, since a group withholds what was said before you
+ * joined — and you must be able to *write* to the target, which is where
+ * blocking is enforced. A file travels as a copy of its bytes rather than as a
+ * second reference: two messages that share one file would take each other
+ * down when either is retracted.
+ */
+export function forwardMessage(
+  messageId: string,
+  targetConversationId: string,
+  userId: string,
+  copyFile: (attachmentId: string, uploaderId: string) => Attachment | null,
+): { ok: true; message: Message } | { ok: false; reason: ForwardRefusal } {
+  const row = db.prepare(`SELECT * FROM messages WHERE id = ?`).get(messageId) as
+    | MessageRow
+    | undefined
+  if (!row) return { ok: false, reason: 'missing' }
+  if (row.deleted_at) return { ok: false, reason: 'retracted' }
+
+  if (!isParticipant(row.conversation_id, userId)) return { ok: false, reason: 'not-yours' }
+  if (row.created_at < joinedAt(row.conversation_id, userId)) {
+    return { ok: false, reason: 'not-yours' }
+  }
+  if (!isParticipant(targetConversationId, userId)) return { ok: false, reason: 'nowhere' }
+  if (blockedInConversation(targetConversationId, userId)) return { ok: false, reason: 'closed' }
+
+  const source = attachmentOf(messageId)
+  if (!row.body && !source) return { ok: false, reason: 'empty' }
+
+  // A chain of forwards credits whoever said it first, not the last relay.
+  const originId = row.forwarded_from ?? row.sender_id
+  const origin = findUser(originId)
+  const forwarded = origin
+    ? { from: { id: origin.id, name: origin.name, hue: origin.hue }, at: row.forwarded_at ?? row.created_at }
+    : null
+
+  const message = addMessage(targetConversationId, userId, row.body, null, null, forwarded)
+  const carried = source ? copyFile(source.id, userId) : null
+  return { ok: true, message: { ...message, attachment: carried } }
+}
+
+/* ------------------------------------------------------------------ pins */
+
+/** More than this at the top of a conversation is a list, not a pin. */
+export const MAX_PINS = 20
+
+export type PinRefusal = 'missing' | 'not-yours' | 'retracted' | 'too-many'
+
+export function pinMessage(
+  conversationId: string,
+  messageId: string,
+  userId: string,
+): { ok: true } | { ok: false; reason: PinRefusal } {
+  if (!isParticipant(conversationId, userId)) return { ok: false, reason: 'not-yours' }
+
+  const row = db
+    .prepare(`SELECT * FROM messages WHERE id = ? AND conversation_id = ?`)
+    .get(messageId, conversationId) as MessageRow | undefined
+  if (!row) return { ok: false, reason: 'missing' }
+  if (row.deleted_at) return { ok: false, reason: 'retracted' }
+  // You cannot pin what you are not allowed to have read.
+  if (row.created_at < joinedAt(conversationId, userId)) return { ok: false, reason: 'missing' }
+
+  const already = db
+    .prepare(`SELECT count(*) AS n FROM pins WHERE conversation_id = ?`)
+    .get(conversationId) as { n: number }
+  const pinned = db
+    .prepare(`SELECT 1 FROM pins WHERE conversation_id = ? AND message_id = ?`)
+    .get(conversationId, messageId)
+  if (!pinned && already.n >= MAX_PINS) return { ok: false, reason: 'too-many' }
+
+  db.prepare(
+    `INSERT OR IGNORE INTO pins (conversation_id, message_id, pinned_by, pinned_at)
+     VALUES (?, ?, ?, ?)`,
+  ).run(conversationId, messageId, userId, Date.now())
+  return { ok: true }
+}
+
+/** Anyone in the conversation can take a pin down — there are no roles here. */
+export function unpinMessage(
+  conversationId: string,
+  messageId: string,
+  userId: string,
+): { ok: true } | { ok: false; reason: PinRefusal } {
+  if (!isParticipant(conversationId, userId)) return { ok: false, reason: 'not-yours' }
+  db.prepare(`DELETE FROM pins WHERE conversation_id = ? AND message_id = ?`).run(
+    conversationId,
+    messageId,
+  )
+  return { ok: true }
+}
+
+/**
+ * The pins, most recent first, and only the ones the viewer could have read.
+ * Someone added to a group yesterday does not inherit its history — pins
+ * included, or a pin would be a way around that rule.
+ */
+export function listPins(conversationId: string, viewerId: string): Message[] {
+  const rows = db
+    .prepare(
+      `SELECT m.* FROM pins p
+       JOIN messages m ON m.id = p.message_id
+       WHERE p.conversation_id = ? AND m.deleted_at IS NULL AND m.created_at >= ?
+       ORDER BY p.pinned_at DESC`,
+    )
+    .all(conversationId, joinedAt(conversationId, viewerId)) as MessageRow[]
+  return withAttachments(rows)
+}
+
+/* ---------------------------------------------------------------- drafts */
+
+/**
+ * What someone had started writing, kept so the other device finds it. It is
+ * per person and per conversation, which is exactly what a participant row is
+ * — no second table, and it disappears with the conversation.
+ */
+export function saveDraft(conversationId: string, userId: string, body: string): number {
+  const text = body.slice(0, 4000)
+  const at = Date.now()
+  db.prepare(
+    `UPDATE participants SET draft = ?, draft_at = ?
+     WHERE conversation_id = ? AND user_id = ?`,
+  ).run(text, at, conversationId, userId)
+  return at
+}
+
+export const draftOf = (conversationId: string, userId: string): string =>
+  (db
+    .prepare(`SELECT draft FROM participants WHERE conversation_id = ? AND user_id = ?`)
+    .get(conversationId, userId) as { draft: string } | undefined)?.draft ?? ''
 
 export function markRead(conversationId: string, userId: string, at: number): number {
   const stamp = Math.min(at, Date.now())
@@ -697,7 +892,7 @@ export function searchMessages(viewerId: string, query: string, limit = 12): Sea
     if (!conversation) return []
     return [
       {
-        message: toMessage(row, attachmentOf(row.id)),
+        message: toMessage(row, attachmentOf(row.id), originOf(row)),
         conversationId: row.conversation_id,
         face: conversation.face,
       },

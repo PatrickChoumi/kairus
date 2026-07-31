@@ -31,6 +31,8 @@ export type Message = {
   deletedAt: number | null
   /** A file travelling with the message, if any. */
   attachment: Attachment | null
+  /** Who said it first, when this message is a forward of someone else's. */
+  forwarded: { from: Face; at: number } | null
   /** Set while a message is still in flight, cleared when the server confirms. */
   pending?: boolean
   /** 0…1 while the file is on its way up. Local only. */
@@ -52,6 +54,10 @@ export type Conversation = {
   unread: number
   /** When the last of the others had read up to. */
   readAt: number
+  /** What this conversation keeps at the top, most recently pinned first. */
+  pins: Message[]
+  /** What you had started writing here, from whichever device you left it on. */
+  draft: string
 }
 
 export type SearchHit = {

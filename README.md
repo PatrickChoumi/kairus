@@ -96,6 +96,24 @@ teintes, inversé. `prefers-reduced-motion` est respecté.
 - Clavier de bout en bout : `⌘K`, `↑`/`↓` ou `j`/`k`, `Entrée`, `Échap`, et `↑`
   dans un champ vide pour reprendre son dernier message
 
+## Prêt côté serveur, pas encore à l'écran
+
+Trois briques existent, sont testées, et n'ont pas encore d'interface — elles
+attendent la refonte du client :
+
+- **Transfert de message** — `POST /api/messages/forward`, trame `forward`. Le
+  message transféré crédite **le premier auteur**, jamais le dernier relais, et
+  un fichier voyage en copie plutôt qu'en seconde référence : deux messages qui
+  partageraient un fichier s'emporteraient l'un l'autre au premier retrait.
+- **Messages épinglés** — `POST /api/pins`, trames `pin` / `unpin`, événement
+  `pinned`. Les épingles sont calculées **par lecteur** : quelqu'un arrivé hier
+  dans un groupe ne reçoit pas, par une épingle, ce qui s'est dit avant lui. Un
+  message retiré emporte son épingle.
+- **Brouillons synchronisés** — `POST /api/drafts`, trame `draft`. Rangé sur la
+  ligne de participation, donc par personne et par conversation. Il ne repart
+  que vers **vos propres autres appareils** : une demi-phrase n'est pas quelque
+  chose à montrer à la personne à qui on écrit.
+
 ## Sécurité
 
 Ce qui est en place, et pourquoi.
@@ -224,7 +242,7 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 155 tests : 111 côté serveur, 44 côté client
+npm test                   # 176 tests : 132 côté serveur, 44 côté client
 npm run typecheck          # serveur et client
 ```
 

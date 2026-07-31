@@ -44,6 +44,7 @@ const message = (over: Partial<Record<string, unknown>> = {}) => ({
   editedAt: null,
   deletedAt: null,
   attachment: null,
+  forwarded: null,
   ...over,
 })
 
@@ -55,6 +56,8 @@ const conversation = (over = {}) => ({
   lastMessage: null,
   unread: 0,
   readAt: 0,
+  pins: [],
+  draft: '',
   ...over,
 })
 

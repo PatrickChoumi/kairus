@@ -98,6 +98,12 @@ export const limits = {
   /** Sending files: a handful at once, then a steady trickle. */
   upload: new Limiter(10, 20),
   /**
+   * Saving a draft. The client debounces, but a draft still travels far more
+   * often than a message, so this is generous where `write` is strict — it is
+   * here to stop a loop, not to pace a typist.
+   */
+  sketch: new Limiter(60, 120),
+  /**
    * Placing calls. Only the ring is counted — the candidates that follow are
    * many and arrive in a burst by nature, and the frame ceiling already covers
    * them. Ringing someone repeatedly is the thing worth slowing down.

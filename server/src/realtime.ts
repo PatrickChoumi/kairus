@@ -9,19 +9,27 @@ import {
   describeConversation,
   findLiveIdentity,
   findUser,
+  forwardMessage,
   isBlocked,
   isParticipant,
   listConversations,
+  listPins,
   markRead,
+  MAX_PINS,
   participantIds,
+  pinMessage,
   retractMessage,
   reviseMessage,
+  saveDraft,
+  unpinMessage,
+  type ForwardRefusal,
   type Message,
+  type PinRefusal,
   type User,
 } from './model.js'
 import { shouldRenew, sign, verify } from './token.js'
 import { knock } from './push.js'
-import { attachmentOf, claim } from './files.js'
+import { attachmentOf, claim, duplicate } from './files.js'
 import { count, gauge, log } from './log.js'
 
 type Outbound =
@@ -41,6 +49,13 @@ type Outbound =
   | { t: 'conversation'; conversation: NonNullable<ReturnType<typeof describeConversation>> }
   /** A conversation that is no longer yours: you left it, or it dissolved. */
   | { t: 'gone'; conversation: string }
+  /** What this conversation now keeps at the top. */
+  | { t: 'pinned'; conversation: string; pins: Message[] }
+  /**
+   * A draft you left on another device. It never travels to anyone else —
+   * half a sentence is not something to show the person you are writing to.
+   */
+  | { t: 'draft'; conversation: string; body: string; at: number }
   /** One end of a call talking to the other. The server only carries it. */
   | {
       t: 'call'
@@ -65,6 +80,23 @@ type CallAct = (typeof CALL_ACTS)[number]
 
 const isCallAct = (value: unknown): value is CallAct =>
   typeof value === 'string' && (CALL_ACTS as readonly string[]).includes(value)
+
+/** Why a forward or a pin was refused, said in one line to the socket. */
+const forwardExcuses: Record<ForwardRefusal, string> = {
+  missing: 'ce message n’existe plus',
+  'not-yours': 'ce message n’existe plus',
+  retracted: 'ce message a été retiré',
+  nowhere: 'cette conversation n’existe pas',
+  closed: 'cette conversation est fermée',
+  empty: 'il n’y a rien à transférer',
+}
+
+const pinExcuses: Record<PinRefusal, string> = {
+  missing: 'ce message n’existe plus',
+  'not-yours': 'cette conversation n’existe pas',
+  retracted: 'ce message a été retiré',
+  'too-many': `on ne peut pas épingler plus de ${MAX_PINS} messages`,
+}
 
 /** What a message with no words is, in the one line a notification has. */
 function wordless(mime: string | undefined): string {
@@ -192,6 +224,31 @@ class Hub {
   /** An edit or a retraction: the same message, in its new state. */
   broadcastRevision(message: Message, skip?: Socket): void {
     this.toConversation(message.conversationId, { t: 'revised', message }, skip)
+  }
+
+  /**
+   * Pins are shaped per reader, not once for everyone: someone who joined a
+   * group yesterday must not receive, through a pin, what was said before.
+   */
+  broadcastPins(conversationId: string): void {
+    for (const userId of participantIds(conversationId)) {
+      this.toUser(userId, {
+        t: 'pinned',
+        conversation: conversationId,
+        pins: listPins(conversationId, userId),
+      })
+    }
+  }
+
+  /** A draft goes to your own other devices, and nowhere else. */
+  broadcastDraft(
+    userId: string,
+    conversationId: string,
+    body: string,
+    at: number,
+    skip?: Socket,
+  ): void {
+    this.toUser(userId, { t: 'draft', conversation: conversationId, body, at }, skip)
   }
 
   broadcastRead(conversationId: string, userId: string, at: number): void {
@@ -443,6 +500,47 @@ function handleFrame(socket: Socket, frame: Record<string, unknown>): void {
       if (!conversation) return
       const at = markRead(conversation, userId, Date.now())
       hub.broadcastRead(conversation, userId, at)
+      break
+    }
+    case 'forward': {
+      const id = str(frame, 'message')
+      if (!conversation || !id) return
+      if (!afford(socket, limits.write, userId, 'trop de transferts d’un coup')) return
+      const result = forwardMessage(id, conversation, userId, duplicate)
+      if (!result.ok) {
+        send(socket, { t: 'error', message: forwardExcuses[result.reason] })
+        return
+      }
+      count('messages_forwarded')
+      const nonce = str(frame, 'nonce')
+      send(socket, { t: 'message', message: result.message, ...(nonce ? { nonce } : {}) })
+      hub.broadcastMessage(result.message, socket)
+      break
+    }
+    case 'pin':
+    case 'unpin': {
+      const id = str(frame, 'message')
+      if (!conversation || !id) return
+      if (!afford(socket, limits.write, userId, 'trop d’épinglages d’un coup')) return
+      const result =
+        type === 'pin'
+          ? pinMessage(conversation, id, userId)
+          : unpinMessage(conversation, id, userId)
+      if (!result.ok) {
+        send(socket, { t: 'error', message: pinExcuses[result.reason] })
+        return
+      }
+      hub.broadcastPins(conversation)
+      break
+    }
+    case 'draft': {
+      if (!conversation) return
+      // Generous on purpose: a draft travels on a pause in typing, not on send.
+      if (!afford(socket, limits.sketch, userId, 'trop de brouillons d’un coup')) return
+      const body = String(frame.body ?? '').slice(0, 4000)
+      const at = saveDraft(conversation, userId, body)
+      // Back to your own other devices only — never to the person you write to.
+      hub.broadcastDraft(userId, conversation, body, at, socket)
       break
     }
     /*

@@ -1,4 +1,12 @@
-import { createReadStream, createWriteStream, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs'
+import {
+  copyFileSync,
+  createReadStream,
+  createWriteStream,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+} from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -190,6 +198,35 @@ export const attachmentOf = (messageId: string): Attachment | null => {
     | AttachmentRow
     | undefined
   return row ? toAttachment(row) : null
+}
+
+/**
+ * Copies an attachment for a forward, bytes and all.
+ *
+ * Sharing one row between two messages would be cheaper, and wrong: retracting
+ * either would erase the file under the other. A copy costs disk — bounded by
+ * the upload limit — and keeps every message the sole owner of what it carries.
+ */
+export function duplicate(attachmentId: string, uploaderId: string): Attachment | null {
+  const source = findAttachment(attachmentId)
+  if (!source) return null
+
+  const id = randomUUID()
+  try {
+    copyFileSync(pathOf(attachmentId), pathOf(id))
+  } catch (error) {
+    log.warn('attachment.copy.failed', { attachmentId, error: String(error) })
+    return null
+  }
+
+  const row: AttachmentRow = { ...source, id, uploader_id: uploaderId, message_id: null }
+  db.prepare(
+    `INSERT INTO attachments
+       (id, uploader_id, message_id, name, mime, size, width, height, duration, peaks, created_at)
+     VALUES
+       (@id, @uploader_id, @message_id, @name, @mime, @size, @width, @height, @duration, @peaks, ?)`,
+  ).run({ ...row }, Date.now())
+  return toAttachment(row)
 }
 
 /** Binds an upload to the message that carries it. Only its own uploader may. */

@@ -602,6 +602,7 @@ export const useStore = create<State & Actions>((set, get) => {
         editedAt: null,
         deletedAt: null,
         attachment: null,
+        forwarded: null,
         pending: true,
       }
       absorb(optimistic)
@@ -654,6 +655,7 @@ export const useStore = create<State & Actions>((set, get) => {
               duration: prepared.duration ?? null,
               peaks: prepared.peaks?.join(',') ?? null,
             },
+            forwarded: null,
             pending: true,
             progress: 0,
             preview,

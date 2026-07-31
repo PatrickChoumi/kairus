@@ -42,6 +42,9 @@ db.exec(`
     last_read_at    INTEGER NOT NULL DEFAULT 0,
     -- Someone added today does not get to read last month.
     joined_at       INTEGER NOT NULL DEFAULT 0,
+    -- What this person had started writing here, kept so another device finds it.
+    draft           TEXT NOT NULL DEFAULT '',
+    draft_at        INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (conversation_id, user_id)
   );
 
@@ -54,8 +57,23 @@ db.exec(`
     created_at      INTEGER NOT NULL,
     edited_at       INTEGER,
     -- Retracting empties the body but keeps the row, so replies still resolve.
-    deleted_at      INTEGER
+    deleted_at      INTEGER,
+    -- Set on a forward: who said it first, and when. It survives being
+    -- forwarded again, so a chain always credits the original author.
+    forwarded_from  TEXT REFERENCES users(id) ON DELETE SET NULL,
+    forwarded_at    INTEGER
   );
+
+  -- What a conversation has decided is worth keeping at the top.
+  CREATE TABLE IF NOT EXISTS pins (
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    message_id      TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    pinned_by       TEXT REFERENCES users(id) ON DELETE SET NULL,
+    pinned_at       INTEGER NOT NULL,
+    PRIMARY KEY (conversation_id, message_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pins_conversation ON pins (conversation_id, pinned_at DESC);
 
   CREATE TABLE IF NOT EXISTS blocks (
     blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -133,6 +151,10 @@ ensureColumn('messages', 'edited_at', 'INTEGER')
 ensureColumn('messages', 'deleted_at', 'INTEGER')
 ensureColumn('attachments', 'duration', 'REAL')
 ensureColumn('attachments', 'peaks', 'TEXT')
+ensureColumn('messages', 'forwarded_from', 'TEXT')
+ensureColumn('messages', 'forwarded_at', 'INTEGER')
+ensureColumn('participants', 'draft', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('participants', 'draft_at', 'INTEGER NOT NULL DEFAULT 0')
 
 /* ------------------------------------------------------------------ search */
 
