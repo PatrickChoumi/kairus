@@ -1,45 +1,119 @@
 /*
- * Kairus design tokens.
+ * Kairus — Vélin.
  *
- * The layout is the one everybody already knows — bubbles, a list of
- * conversations, an avatar and a name. What sets this apart is restraint:
- * fewer surfaces, fewer borders, one accent, and a lot of air.
+ * The layout is the one everybody already knows: a list of conversations, a
+ * thread, bubbles, an avatar and a name. What this direction adds is a
+ * *surface*. Paper that takes ink well, and a night version of the same paper
+ * — not an inversion of it.
  *
- * The dark palette is Tokyo Night: a deep indigo rather than a black, with
- * text that stops short of white. It is a low-contrast scheme by design —
- * comfortable to sit in for a long time, which is what a messenger is for.
- * The light one is its daytime counterpart, same hues, inverted.
+ * Two decisions carry the whole thing:
+ *
+ *   The names are set in a serif, and nothing else is. One typographic move,
+ *   used in two places — the row and the header — is what separates elegant
+ *   from costumed. Message bodies stay in a humanist sans, because a serif
+ *   body in a chat is a piece of theatre nobody asked for.
+ *
+ *   Bubbles are round and generous on both sides, with no borders at all.
+ *   Contrast comes from the surface, never from an outline.
+ *
+ * The accent is one indigo, at the same hue in both themes and lifted for the
+ * dark ground, so the two themes are recognisably the same product.
  */
 
-:root {
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Cool paper rather than warm cream: the ground has to sit under an indigo. */
+  --bg: #f1f2f4;
+  --veil: #ffffff;
+  --veil-high: #e4e6eb;
+  --ink: #15161a;
+  --ink-soft: #565a64;
+  --ink-faint: #7c8089;
+  --hair: rgb(21 22 26 / 10%);
+  --hair-strong: rgb(21 22 26 / 18%);
+
+  /* One ink indigo: what is unread, what has focus, and send. */
+  --accent: #2f4b8f;
+  --accent-ink: #ffffff;
+  --accent-soft: rgb(47 75 143 / 13%);
+
+  /* Someone is there. */
+  --live: #3e7a56;
+  /* Taking something back, hanging up, refusing. */
+  --grave: #a8434f;
+
+  /* Your own words sit on the same indigo, diluted until it is a surface. */
+  --mine: #dfe6f5;
+  --mine-ink: #17203a;
+
+  --shadow-lift: 0 1px 2px rgb(21 22 26 / 6%), 0 12px 30px -16px rgb(21 22 26 / 24%);
+  --shadow-float: 0 24px 60px -24px rgb(21 22 26 / 30%);
+}
+
+/*
+ * Night. Given the same care as the day: the grounds are chosen, not derived,
+ * and the accent is re-picked at a lightness that works on them rather than
+ * reused and left to muddy.
+ */
+:root[data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #1a1b26;
-  --veil: #1f2335;
-  --veil-high: #292e42;
-  --ink: #c0caf5;
-  --ink-soft: #9aa5ce;
-  --ink-faint: #565f89;
-  --hair: rgb(192 202 245 / 9%);
-  --hair-strong: rgb(192 202 245 / 17%);
+  --bg: #16171c;
+  --veil: #1e2027;
+  --veil-high: #272a33;
+  --ink: #e4e6eb;
+  --ink-soft: #9ca1ac;
+  --ink-faint: #757a85;
+  --hair: rgb(228 230 235 / 9%);
+  --hair-strong: rgb(228 230 235 / 17%);
 
-  /* One blue, used sparingly: what is unread, what has focus, and send. */
-  --accent: #7aa2f7;
-  --accent-ink: #161620;
-  --accent-soft: rgb(122 162 247 / 15%);
+  --accent: #8aa4e0;
+  --accent-ink: #10131c;
+  --accent-soft: rgb(138 164 224 / 15%);
 
-  /* Someone is there. Green everywhere else, so green here. */
-  --live: #9ece6a;
-  /* Taking something back, hanging up, refusing. */
-  --grave: #f7768e;
+  --live: #85ae8c;
+  --grave: #d08791;
 
-  /* What your own messages sit on: the accent, dimmed until it is a surface. */
-  --mine: #2f3c60;
-  --mine-ink: #d6dffb;
+  --mine: #2b3247;
+  --mine-ink: #dfe4f2;
 
-  --shadow-lift: 0 1px 2px rgb(8 8 14 / 40%), 0 12px 38px -14px rgb(8 8 14 / 70%);
-  --shadow-float: 0 24px 68px -22px rgb(8 8 14 / 80%);
+  --shadow-lift: 0 1px 2px rgb(6 7 10 / 40%), 0 12px 38px -14px rgb(6 7 10 / 70%);
+  --shadow-float: 0 24px 68px -22px rgb(6 7 10 / 80%);
+}
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --bg: #16171c;
+    --veil: #1e2027;
+    --veil-high: #272a33;
+    --ink: #e4e6eb;
+    --ink-soft: #9ca1ac;
+    --ink-faint: #757a85;
+    --hair: rgb(228 230 235 / 9%);
+    --hair-strong: rgb(228 230 235 / 17%);
+
+    --accent: #8aa4e0;
+    --accent-ink: #10131c;
+    --accent-soft: rgb(138 164 224 / 15%);
+
+    --live: #85ae8c;
+    --grave: #d08791;
+
+    --mine: #2b3247;
+    --mine-ink: #dfe4f2;
+
+    --shadow-lift: 0 1px 2px rgb(6 7 10 / 40%), 0 12px 38px -14px rgb(6 7 10 / 70%);
+    --shadow-float: 0 24px 68px -22px rgb(6 7 10 / 80%);
+  }
+}
+
+:root {
+  /* The one typographic move: names, and nothing else. */
+  --font-name: ui-serif, Georgia, 'Iowan Old Style', 'Times New Roman', serif;
   --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Inter,
     'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
@@ -47,39 +121,16 @@
   --text: 0.9375rem;
   --text-meta: 0.75rem;
   --text-label: 0.6875rem;
-  --tracking: -0.009em;
+  --tracking: -0.006em;
+  /* Airy: this is what makes a thread read rather than merely list. */
+  --leading: 1.6;
 
   --gutter: clamp(16px, 4vw, 26px);
   --column: 40rem;
 
-  --radius: 8px;
-  --radius-bubble: 16px;
-  --radius-tight: 5px;
-  --radius-panel: 12px;
-}
-
-:root[data-theme='light'] {
-  color-scheme: light;
-
-  --bg: #e9eaf1;
-  --veil: #fbfbfe;
-  --veil-high: #dcdff0;
-  --ink: #2c3054;
-  --ink-soft: #575d85;
-  --ink-faint: #8189b3;
-  --hair: rgb(44 48 84 / 11%);
-  --hair-strong: rgb(44 48 84 / 20%);
-
-  --accent: #3a6fd8;
-  --accent-ink: #fbfbfe;
-  --accent-soft: rgb(58 111 216 / 13%);
-
-  --live: #587539;
-  --grave: #c94f65;
-
-  --mine: #d3e0fb;
-  --mine-ink: #21274a;
-
-  --shadow-lift: 0 1px 2px rgb(44 48 84 / 7%), 0 12px 30px -16px rgb(44 48 84 / 26%);
-  --shadow-float: 0 24px 60px -24px rgb(44 48 84 / 32%);
+  --radius: 10px;
+  /* Round and generous, with a short corner where a run shares an edge. */
+  --radius-bubble: 18px;
+  --radius-tight: 6px;
+  --radius-panel: 14px;
 }

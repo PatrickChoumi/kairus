@@ -44,12 +44,17 @@ tirer un message vers le centre y répond, tirer le fil vers la droite le
 referme, double-cliquer répond aussi, `↑` dans un champ vide rouvre votre
 dernier message pour le corriger.
 
-**Tokyo Night.** Le thème sombre n'est pas un noir mais un indigo profond, avec
-un texte qui s'arrête avant le blanc : un contraste volontairement bas, dans
-lequel on peut rester longtemps — ce qu'on demande à une messagerie. Un seul
-bleu porte l'accent (le non-lu, le focus, l'envoi), un vert dit la présence, un
-rose dit ce qui se retire ou raccroche. Le thème clair est le même jeu de
-teintes, inversé. `prefers-reduced-motion` est respecté.
+**Vélin.** Un papier qui prend l'encre, de jour comme de nuit. Les noms sont
+composés dans un romain à empattements — et rien d'autre ne l'est : un seul
+geste typographique, à deux endroits, sépare l'élégant du costume. Le corps des
+messages reste en linéale. Les bulles sont rondes des deux côtés, sans aucune
+bordure : le contraste vient de la surface. Un seul indigo porte l'accent, un
+vert dit la présence, un rouge sourd ce qui se retire ou raccroche.
+
+Les deux thèmes sont traités à égalité : le sombre n'est pas le clair inversé,
+ses fonds sont choisis et l'accent y est **repris à une clarté qui tient sur
+eux**, à la même teinte, de sorte qu'on reconnaît le même produit.
+`prefers-reduced-motion` est respecté.
 
 ---
 

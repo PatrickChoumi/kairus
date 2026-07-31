@@ -464,6 +464,9 @@
 }
 
 .row__name {
+  font-family: var(--font-name);
+  font-size: 1rem;
+  letter-spacing: 0;
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -645,7 +648,9 @@ kbd {
 }
 
 .bar__name {
-  font-size: var(--text);
+  font-family: var(--font-name);
+  font-size: 1.0625rem;
+  letter-spacing: 0;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -766,7 +771,7 @@ kbd {
 }
 
 .line[data-opens] {
-  margin-block-start: 10px;
+  margin-block-start: 12px;
 }
 
 .line[data-mine] {
@@ -779,8 +784,8 @@ kbd {
 
 .bubble {
   position: relative;
-  max-inline-size: min(78%, 30rem);
-  padding: 8px 12px;
+  max-inline-size: min(76%, 32rem);
+  padding: 9px 14px;
   border-radius: var(--radius-bubble);
   background: var(--veil);
 }
