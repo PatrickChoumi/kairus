@@ -291,3 +291,87 @@ describe('presence and typing', () => {
     vi.useRealTimers()
   })
 })
+
+describe('forwarding', () => {
+  it('sends the held message on, and never guesses what it becomes', () => {
+    const held = message({ id: 'm1', body: 'à relayer' })
+    useStore.setState({ messages: { c1: [held] } })
+
+    useStore.getState().relay(held)
+    expect(useStore.getState().relaying?.id).toBe('m1')
+
+    useStore.getState().relayTo('c2')
+    expect(useStore.getState().relaying).toBeNull()
+    expect(sent.at(-1)).toMatchObject({ t: 'forward', conversation: 'c2', message: 'm1' })
+
+    // No optimistic bubble: only the server knows who a forward credits.
+    expect(useStore.getState().messages.c2).toBeUndefined()
+  })
+
+  it('refuses to pick up something that is gone or not yet sent', () => {
+    useStore.getState().relay(message({ id: 'm1', deletedAt: 1 }))
+    expect(useStore.getState().relaying).toBeNull()
+
+    useStore.getState().relay(message({ id: 'm2', pending: true }))
+    expect(useStore.getState().relaying).toBeNull()
+  })
+})
+
+describe('pins', () => {
+  it('asks, and takes the answer from the server rather than guessing', () => {
+    const target = message({ id: 'm1' })
+    useStore.getState().pin(target, true)
+    expect(sent.at(-1)).toMatchObject({ t: 'pin', conversation: 'c1', message: 'm1' })
+    // Nothing is pinned locally until the server says so.
+    expect(useStore.getState().conversations[0]?.pins).toEqual([])
+
+    deliver({ t: 'pinned', conversation: 'c1', pins: [target] })
+    expect(useStore.getState().conversations[0]?.pins).toHaveLength(1)
+
+    useStore.getState().pin(target, false)
+    expect(sent.at(-1)).toMatchObject({ t: 'unpin', message: 'm1' })
+    deliver({ t: 'pinned', conversation: 'c1', pins: [] })
+    expect(useStore.getState().conversations[0]?.pins).toEqual([])
+  })
+
+  it('leaves a message that was taken back alone', () => {
+    useStore.getState().pin(message({ id: 'm1', deletedAt: 1 }), true)
+    expect(sent.filter((f) => (f as { t: string }).t === 'pin')).toHaveLength(0)
+  })
+})
+
+describe('drafts', () => {
+  it('keeps what is being written, and says so once', () => {
+    useStore.getState().sketch('c1', 'à moitié écrit')
+    expect(useStore.getState().conversations[0]?.draft).toBe('à moitié écrit')
+    expect(sent.at(-1)).toMatchObject({ t: 'draft', conversation: 'c1', body: 'à moitié écrit' })
+
+    // The same text again is not news.
+    const before = sent.length
+    useStore.getState().sketch('c1', 'à moitié écrit')
+    expect(sent).toHaveLength(before)
+  })
+
+  it('takes a draft left on another device', () => {
+    deliver({ t: 'draft', conversation: 'c1', body: 'depuis le téléphone', at: 2 })
+    expect(useStore.getState().conversations[0]?.draft).toBe('depuis le téléphone')
+  })
+
+  it('clears the draft when the sentence is finally sent', () => {
+    useStore.setState({ open: 'c1' })
+    useStore.getState().sketch('c1', 'presque fini')
+    useStore.getState().say('presque fini, voilà')
+
+    expect(useStore.getState().conversations[0]?.draft).toBe('')
+    expect(sent.some((f) => {
+      const frame = f as { t: string; body?: string }
+      return frame.t === 'draft' && frame.body === ''
+    })).toBe(true)
+  })
+
+  it('ignores a draft for a conversation it does not know', () => {
+    const before = sent.length
+    useStore.getState().sketch('nowhere', 'perdu')
+    expect(sent).toHaveLength(before)
+  })
+})

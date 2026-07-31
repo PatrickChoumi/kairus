@@ -14,7 +14,7 @@ import { Composer } from './Composer'
 import { Lightbox } from './Lightbox'
 import { Menu } from './Menu'
 import { dayLabel, sameBreath, sameDay } from '../lib/time'
-import type { Attachment, Conversation } from '../net/types'
+import type { Attachment, Conversation, Message } from '../net/types'
 
 type Props = {
   conversation: Conversation
@@ -24,6 +24,15 @@ type Props = {
 }
 
 const NEAR_BOTTOM = 120
+
+/** What a message with no words is, in the one line the pin bar has for it. */
+function summarise(message: Message): string {
+  if (message.body) return message.body
+  const mime = message.attachment?.mime ?? ''
+  if (mime.startsWith('audio/')) return 'message vocal'
+  if (mime.startsWith('image/')) return 'photo'
+  return message.attachment ? 'fichier' : '…'
+}
 
 /** The line under the name: who is there, or who this is. */
 function presence(conversation: Conversation, online: number, typing: boolean): string {
@@ -47,12 +56,16 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   const retract = useStore((s) => s.retract)
   const setCursor = useStore((s) => s.setCursor)
   const ringUp = useStore((s) => s.ringUp)
+  const relay = useStore((s) => s.relay)
+  const pin = useStore((s) => s.pin)
 
   const stream = useRef<HTMLDivElement>(null)
   const wasNearBottom = useRef(true)
   const lastCount = useRef(0)
   const lastId = useRef<string | null>(null)
   const [menu, setMenu] = useState(false)
+  /** Which pin the bar is showing, when there is more than one. */
+  const [aimedPin, setAimedPin] = useState(0)
 
   useLayoutEffect(() => {
     const el = stream.current
@@ -61,6 +74,9 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   })
 
   // Arriving in a thread puts you at the present moment, with no scroll animation.
+  // A different conversation has its own pins; start at the first of them.
+  useEffect(() => setAimedPin(0), [conversation.id])
+
   useLayoutEffect(() => {
     const el = stream.current
     if (!el) return
@@ -107,6 +123,10 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
     id === me.id ? 'vous' : (conversation.members.find((m) => m.id === id)?.name ?? 'quelqu’un')
   const hueOf = (id: string): number | null =>
     id === me.id ? null : (conversation.members.find((m) => m.id === id)?.hue ?? null)
+
+  const pins = conversation.pins ?? []
+  const shownPin = pins[Math.min(aimedPin, Math.max(pins.length - 1, 0))] ?? null
+  const pinnedIds = new Set(pins.map((p) => p.id))
 
   const byId = new Map(messages.map((m) => [m.id, m]))
   const lastMine = [...messages]
@@ -160,6 +180,40 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
         {menu && <Menu conversation={conversation} onClose={() => setMenu(false)} />}
       </header>
 
+      {shownPin && (
+        <div className="pinbar">
+          <button
+            className="pinbar__go"
+            onClick={() => {
+              document
+                .getElementById(`m-${shownPin.id}`)
+                ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+              // More than one: each visit moves to the next, as everywhere else.
+              if (pins.length > 1) setAimedPin((i) => (i + 1) % pins.length)
+            }}
+            title="aller au message épinglé"
+          >
+            <span className="pinbar__mark" aria-hidden="true">
+              <Icon name="pin" size={15} />
+            </span>
+            <span className="pinbar__what">
+              <span className="pinbar__label">
+                épinglé{pins.length > 1 ? ` · ${aimedPin + 1}/${pins.length}` : ''}
+              </span>
+              <span className="pinbar__body">{summarise(shownPin)}</span>
+            </span>
+          </button>
+          <button
+            className="pinbar__drop"
+            onClick={() => pin(shownPin, false)}
+            aria-label="détacher ce message"
+            title="détacher"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      )}
+
       <div className="stream" ref={stream} onScroll={onScroll}>
         <div className="stream__inner">
           {messages.length === 0 && (
@@ -211,9 +265,12 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
                   read={
                     mine && message.id === lastMine?.id && conversation.readAt >= message.createdAt
                   }
+                  pinned={pinnedIds.has(message.id)}
                   onReply={setReply}
                   onEdit={setEdit}
                   onRetract={retract}
+                  onRelay={relay}
+                  onPin={pin}
                   onOpenImage={openImage}
                 />
               </div>

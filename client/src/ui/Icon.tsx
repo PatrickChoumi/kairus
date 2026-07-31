@@ -30,6 +30,9 @@ export type IconName =
   | 'check'
   | 'checks'
   | 'close'
+  | 'pin'
+  | 'unpin'
+  | 'forward'
   | 'download'
   | 'muted'
   | 'sound'
@@ -125,6 +128,25 @@ const shapes: Record<IconName, ReactNode> = {
     </>
   ),
   close: <path d="m6.2 6.2 11.6 11.6M17.8 6.2 6.2 17.8" />,
+  pin: (
+    <>
+      <path d="M8.8 3.4h6.4l-.9 5.5 3.5 3.3H6.2l3.5-3.3z" />
+      <path d="M12 12.2v8.4" />
+    </>
+  ),
+  unpin: (
+    <>
+      <path d="M8.8 3.4h6.4l-.9 5.5 3.5 3.3H6.2l3.5-3.3z" />
+      <path d="M12 12.2v8.4" />
+      <path d="m3.6 3.6 16.8 16.8" />
+    </>
+  ),
+  forward: (
+    <>
+      <path d="M15 6.2l5.4 5.4L15 17" />
+      <path d="M20.4 11.6H10a6.6 6.6 0 0 0-6.6 6.6v1.4" />
+    </>
+  ),
   download: (
     <>
       <path d="M12 3.8v11" />

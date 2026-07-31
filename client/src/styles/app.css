@@ -516,6 +516,11 @@
   color: var(--ink-faint);
 }
 
+/* An unfinished sentence is the thing you have to come back and finish. */
+.row__draft {
+  color: var(--accent);
+}
+
 .row__stirring {
   color: var(--accent);
   font-style: normal;
@@ -713,6 +718,88 @@ kbd {
   margin-block-start: 4px;
 }
 
+/* ---------------------------------------------------------------- pinbar */
+
+/*
+ * What the conversation keeps at the top. One at a time, even when there are
+ * several: a bar that grows is a list, and a list at the top of a thread is
+ * exactly the clutter this application is trying not to have.
+ */
+.pinbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-inline: max(var(--gutter), calc(50% - var(--column) / 2));
+  padding-block: 7px;
+  background: var(--veil);
+  border-block-end: 1px solid var(--hair);
+  animation: settle 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.pinbar__go {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-inline-size: 0;
+  padding: 3px 6px;
+  border-radius: var(--radius-tight);
+  border-inline-start: 2px solid var(--accent);
+  text-align: start;
+  transition: background-color 0.16s ease;
+}
+
+.pinbar__go:hover {
+  background: var(--veil-high);
+}
+
+.pinbar__mark {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.pinbar__what {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.pinbar__label {
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.pinbar__body {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinbar__drop {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: 50%;
+  color: var(--ink-faint);
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.pinbar__drop:hover {
+  background: var(--veil-high);
+  color: var(--ink);
+}
+
 /* ----------------------------------------------------------------- stream */
 
 .stream {
@@ -840,6 +927,33 @@ kbd {
 
 :root[data-theme='light'] .bubble__author {
   color: hsl(var(--hue, 250) 46% 38%);
+}
+
+/* Whose words these are, when they are not the sender's own. */
+.bubble__from {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-block-end: 3px;
+  font-size: var(--text-label);
+  color: var(--accent);
+}
+
+/* A pin is a state of the message, so it is said on the message. */
+.line[data-pinned] .bubble::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-end: -14px;
+  inline-size: 3px;
+  block-size: calc(100% - 20px);
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.55;
+}
+
+.line[data-mine][data-pinned] .bubble::after {
+  inset-inline: -14px auto;
 }
 
 .bubble__body {
@@ -1664,6 +1778,138 @@ kbd {
 .call[data-state='ended'] .call__who {
   opacity: 0.6;
   transition: opacity 0.4s ease;
+}
+
+/* ------------------------------------------------------------------ relay */
+
+.relay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  padding: max(11vh, 56px) var(--gutter) var(--gutter);
+  background: color-mix(in srgb, var(--bg) 66%, transparent);
+  backdrop-filter: blur(12px) saturate(130%);
+}
+
+.relay__panel {
+  inline-size: min(100%, 26rem);
+  max-block-size: min(62vh, 32rem);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius-panel);
+  background: var(--veil);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+  will-change: transform, opacity;
+}
+
+.relay__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 8px 18px;
+}
+
+.relay__quest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  font-size: var(--text-label);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.relay__drop {
+  display: grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: 50%;
+  color: var(--ink-faint);
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.relay__drop:hover {
+  background: var(--veil-high);
+  color: var(--ink);
+}
+
+/* What is being sent, so nobody forwards the wrong thing. */
+.relay__what {
+  margin-inline: 18px;
+  padding: 8px 12px;
+  border-inline-start: 2px solid var(--accent);
+  border-radius: var(--radius-tight);
+  background: var(--veil-high);
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.relay__field {
+  padding: 14px 18px;
+  font-size: 0.9375rem;
+  outline: none;
+  border-block-end: 1px solid var(--hair);
+}
+
+.relay__field::placeholder {
+  color: var(--ink-faint);
+}
+
+.relay__list {
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.relay__row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  inline-size: 100%;
+  padding: 7px 11px;
+  border-radius: var(--radius-tight);
+  text-align: start;
+}
+
+.relay__list > li[data-aimed] .relay__row {
+  background: var(--veil-high);
+}
+
+.relay__name {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-name);
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.relay__hint {
+  flex: 0 0 auto;
+  font-size: var(--text-label);
+  color: var(--ink-faint);
+}
+
+.relay__none {
+  padding: 22px;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
 }
 
 /* ----------------------------------------------------------------- notice */

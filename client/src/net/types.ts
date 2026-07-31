@@ -100,6 +100,10 @@ export type Inbound =
   | { t: 'read'; conversation: string; userId: string; at: number }
   | { t: 'presence'; userId: string; online: boolean }
   | { t: 'conversation'; conversation: Conversation }
+  /** What this conversation now keeps at the top. */
+  | { t: 'pinned'; conversation: string; pins: Message[] }
+  /** A draft you left on another device. It never comes from anyone else. */
+  | { t: 'draft'; conversation: string; body: string; at: number }
   /** A conversation that is no longer yours: you left it, or it dissolved. */
   | { t: 'gone'; conversation: string }
   | { t: 'error'; message: string; retryAfter?: number; code?: 'expired' }

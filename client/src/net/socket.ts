@@ -14,6 +14,10 @@ export type Outbound =
     }
   | { t: 'revise'; message: string; body: string }
   | { t: 'retract'; message: string }
+  | { t: 'forward'; conversation: string; message: string; nonce: string }
+  | { t: 'pin'; conversation: string; message: string }
+  | { t: 'unpin'; conversation: string; message: string }
+  | { t: 'draft'; conversation: string; body: string }
   | { t: 'typing'; conversation: string }
   | { t: 'read'; conversation: string }
 
@@ -64,8 +68,10 @@ class Connection {
     }
     // Transient signals are worthless once late; durable ones are kept.
     // A call is the most transient of all: a ring delivered after the link
-    // came back would make someone else's phone go off for nothing.
-    if (frame.t === 'typing' || frame.t === 'call') return
+    // came back would make someone else's phone go off for nothing. A draft
+    // is the same in the other direction — a stale one would overwrite a
+    // newer sentence on the device that has been typing since.
+    if (frame.t === 'typing' || frame.t === 'call' || frame.t === 'draft') return
     this.outbox.push(frame)
   }
 

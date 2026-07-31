@@ -3,6 +3,7 @@ import { useStore } from '../state/store'
 import { Rail } from './Rail'
 import { Thread } from './Thread'
 import { Cursor } from './Cursor'
+import { Relay } from './Relay'
 import { Flight } from './Flight'
 import { SPRING, prefersReducedMotion } from '../motion/spring'
 import { useSpringTo } from '../motion/hooks'
@@ -221,6 +222,7 @@ export function Stage() {
       )}
 
       <Cursor />
+      <Relay />
     </div>
   )
 }

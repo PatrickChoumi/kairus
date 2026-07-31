@@ -20,9 +20,13 @@ type Props = {
   quoted: Message | null
   quotedAuthor: string | null
   read: boolean
+  /** Whether this message is one of the conversation's pins. */
+  pinned: boolean
   onReply: (message: Message) => void
   onEdit: (message: Message) => void
   onRetract: (message: Message) => void
+  onRelay: (message: Message) => void
+  onPin: (message: Message, pinned: boolean) => void
   onOpenImage: (attachment: Attachment, url: string) => void
 }
 
@@ -44,9 +48,12 @@ export function Bubble({
   quoted,
   quotedAuthor,
   read,
+  pinned,
   onReply,
   onEdit,
   onRetract,
+  onRelay,
+  onPin,
   onOpenImage,
 }: Props) {
   const row = useRef<HTMLDivElement>(null)
@@ -95,6 +102,7 @@ export function Bubble({
       data-gone={gone || undefined}
       data-wordless={message.attachment && !message.body && !gone ? true : undefined}
       data-held={held || undefined}
+      data-pinned={pinned || undefined}
       style={style}
       ref={row}
       {...drag}
@@ -110,6 +118,13 @@ export function Bubble({
 
       <div className="bubble">
         {author && <span className="bubble__author">{author}</span>}
+
+        {message.forwarded && !gone && (
+          <span className="bubble__from">
+            <Icon name="forward" size={13} />
+            transféré de {message.forwarded.from.name}
+          </span>
+        )}
 
         {quoted && (
           <button
@@ -166,6 +181,25 @@ export function Bubble({
           <button onClick={() => onReply(message)} aria-label="répondre" title="répondre">
             <Icon name="reply" size={17} />
           </button>
+          {!message.pending && (
+            <>
+              <button
+                onClick={() => onRelay(message)}
+                aria-label="transférer"
+                title="transférer"
+              >
+                <Icon name="forward" size={17} />
+              </button>
+              <button
+                onClick={() => onPin(message, !pinned)}
+                aria-label={pinned ? 'détacher' : 'épingler'}
+                title={pinned ? 'détacher' : 'épingler'}
+                aria-pressed={pinned}
+              >
+                <Icon name={pinned ? 'unpin' : 'pin'} size={17} />
+              </button>
+            </>
+          )}
           {mine && !message.pending && (
             <>
               {message.body && (

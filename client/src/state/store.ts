@@ -23,6 +23,8 @@ type State = {
   replyTo: Message | null
   /** The message being rewritten, if any. Never set at the same time as replyTo. */
   editing: Message | null
+  /** The message waiting for somewhere to be sent on to. */
+  relaying: Message | null
   typing: Record<string, number>
   online: Record<string, boolean>
 
@@ -68,6 +70,13 @@ type Actions = {
   retract: (message: Message) => void
   breathe: () => void
   older: () => Promise<void>
+
+  /** Picks a message up; `relayTo` puts it down somewhere else. */
+  relay: (message: Message | null) => void
+  relayTo: (conversationId: string) => void
+  pin: (message: Message, pinned: boolean) => void
+  /** Saves what is being written so another device finds it. */
+  sketch: (conversationId: string, body: string) => void
 
   refreshPush: () => Promise<void>
   togglePush: () => Promise<void>
@@ -302,6 +311,28 @@ export const useStore = create<State & Actions>((set, get) => {
           set((s) => ({ online: { ...s.online, [event.userId]: event.online } }))
           break
 
+        case 'pinned':
+          set((s) => ({
+            conversations: s.conversations.map((c) =>
+              c.id === event.conversation ? { ...c, pins: event.pins } : c,
+            ),
+          }))
+          break
+
+        /*
+         * A draft from one of your own other devices. It is stored either way,
+         * but it only reaches the composer when there is nothing there to
+         * overwrite — a sentence being typed here outranks one typed earlier
+         * somewhere else.
+         */
+        case 'draft':
+          set((s) => ({
+            conversations: s.conversations.map((c) =>
+              c.id === event.conversation ? { ...c, draft: event.body } : c,
+            ),
+          }))
+          break
+
         case 'call':
           void caller.receive(event)
           break
@@ -348,6 +379,7 @@ export const useStore = create<State & Actions>((set, get) => {
     open: null,
     replyTo: null,
     editing: null,
+    relaying: null,
     typing: {},
     online: {},
     blocked: [],
@@ -518,6 +550,7 @@ export const useStore = create<State & Actions>((set, get) => {
         open: null,
         replyTo: null,
         editing: null,
+        relaying: null,
         typing: {},
         online: {},
         cursor: false,
@@ -528,13 +561,13 @@ export const useStore = create<State & Actions>((set, get) => {
     },
 
     enter(conversationId) {
-      set({ open: conversationId, replyTo: null, editing: null, cursor: false })
+      set({ open: conversationId, replyTo: null, editing: null, relaying: null, cursor: false })
       void hydrate(conversationId)
       markRead(conversationId)
     },
 
     leave() {
-      set({ open: null, replyTo: null, editing: null, reading: false })
+      set({ open: null, replyTo: null, editing: null, relaying: null, reading: false })
     },
 
     async startWith(handle) {
@@ -607,6 +640,7 @@ export const useStore = create<State & Actions>((set, get) => {
       }
       absorb(optimistic)
       set({ replyTo: null })
+      get().sketch(open, '')
 
       connection.send({
         t: 'send',
@@ -715,6 +749,52 @@ export const useStore = create<State & Actions>((set, get) => {
       if (message.senderId !== get().me?.id || message.pending) return
       absorbRevision({ ...message, body: '', deletedAt: Date.now() })
       connection.send({ t: 'retract', message: message.id })
+    },
+
+    relay(message) {
+      if (message?.pending || message?.deletedAt) return
+      set({ relaying: message })
+    },
+
+    /**
+     * Sends the held message on. No optimistic copy: the server decides what
+     * a forward becomes — who it credits, and whether the file could be
+     * copied — so guessing here would only mean showing a wrong bubble first.
+     */
+    relayTo(conversationId) {
+      const { relaying } = get()
+      if (!relaying) return
+      set({ relaying: null })
+      connection.send({
+        t: 'forward',
+        conversation: conversationId,
+        message: relaying.id,
+        nonce: `pending:${crypto.randomUUID()}`,
+      })
+      const target = get().conversations.find((c) => c.id === conversationId)
+      set({ notice: target ? `transféré à ${target.face.name}` : 'transféré' })
+    },
+
+    pin(message, pinned) {
+      const conversationId = message.conversationId
+      if (message.pending || message.deletedAt) return
+      // The server answers with the whole pin list, so nothing is guessed here.
+      connection.send({
+        t: pinned ? 'pin' : 'unpin',
+        conversation: conversationId,
+        message: message.id,
+      })
+    },
+
+    sketch(conversationId, body) {
+      const known = get().conversations.find((c) => c.id === conversationId)
+      if (!known || known.draft === body) return
+      set((s) => ({
+        conversations: s.conversations.map((c) =>
+          c.id === conversationId ? { ...c, draft: body } : c,
+        ),
+      }))
+      connection.send({ t: 'draft', conversation: conversationId, body })
     },
 
     /** Signals "someone is writing", at most once per second. */

@@ -20,6 +20,10 @@ export function Composer({ peerName }: { peerName: string }) {
   const revise = useStore((s) => s.revise)
   const breathe = useStore((s) => s.breathe)
   const notify = useStore((s) => s.notify)
+  const sketch = useStore((s) => s.sketch)
+  const savedDraft = useStore(
+    (s) => s.conversations.find((c) => c.id === s.open)?.draft ?? '',
+  )
   const replyTo = useStore((s) => s.replyTo)
   const setReply = useStore((s) => s.reply)
   const editing = useStore((s) => s.editing)
@@ -112,11 +116,33 @@ export function Composer({ peerName }: { peerName: string }) {
 
   useEffect(resize, [draft])
 
-  // Switching threads gives you a clean slate and the cursor.
+  /*
+   * Arriving in a thread picks up whatever was left half-written in it — from
+   * this device or another. Read once, on arrival: a later sync must not
+   * reach in and rewrite a sentence being typed right now.
+   */
   useEffect(() => {
-    setDraft('')
+    setDraft(useStore.getState().conversations.find((c) => c.id === open)?.draft ?? '')
     area.current?.focus()
   }, [open])
+
+  // A draft that turns up while the field is empty is worth having; one that
+  // turns up mid-sentence is not worth losing the sentence for.
+  useEffect(() => {
+    if (savedDraft && draft === '' && !editing) setDraft(savedDraft)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedDraft])
+
+  /*
+   * The draft travels on a pause, not on a keystroke: a websocket frame per
+   * character would be a flood, and the only thing anyone needs is the last
+   * state of the sentence.
+   */
+  useEffect(() => {
+    if (!open || editing) return
+    const timer = window.setTimeout(() => sketch(open, draft), 700)
+    return () => window.clearTimeout(timer)
+  }, [draft, open, editing, sketch])
 
   useEffect(() => {
     if (replyTo) area.current?.focus()

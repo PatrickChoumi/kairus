@@ -83,6 +83,20 @@ eux**, à la même teinte, de sorte qu'on reconnaît le même produit.
   raison écrite quand ça se termine mal. À deux seulement : un groupe n'a
   personne en particulier à appeler
 - Réponses citées, avec saut vers le message cité
+- **Transfert** : on prend un message, on choisit où il va. Le transfert crédite
+  **le premier auteur**, jamais le dernier relais — transférer un transfert
+  porte l'origine plus loin. Un fichier voyage en copie de ses octets : deux
+  messages qui partageraient un fichier s'emporteraient l'un l'autre au premier
+  retrait
+- **Messages épinglés** : une barre sous l'en-tête, un seul message à la fois
+  même quand il y en a plusieurs — un compteur et un clic pour passer au
+  suivant, parce qu'une barre qui grandit est une liste. Les épingles sont
+  calculées **par lecteur** : quelqu'un arrivé hier dans un groupe n'y trouve
+  pas ce qui s'est dit avant lui. Retirer un message décroche son épingle
+- **Brouillons synchronisés** : ce qui reste à moitié écrit apparaît dans la
+  liste, revient dans le champ quand on rouvre la conversation, et suit d'un
+  appareil à l'autre. Il part sur une pause de frappe, pas sur une touche, et
+  n'arrive jamais chez la personne à qui on écrit
 - Indicateur de frappe, présence, accusés de lecture, compteurs de non-lus
 - Recherche dans l'historique sur un index FTS5 ; les personnes se trouvent par
   nom d'usage exact hors de votre cercle, librement à l'intérieur
@@ -100,24 +114,6 @@ eux**, à la même teinte, de sorte qu'on reconnaît le même produit.
   point de mesure derrière un jeton
 - Clavier de bout en bout : `⌘K`, `↑`/`↓` ou `j`/`k`, `Entrée`, `Échap`, et `↑`
   dans un champ vide pour reprendre son dernier message
-
-## Prêt côté serveur, pas encore à l'écran
-
-Trois briques existent, sont testées, et n'ont pas encore d'interface — elles
-attendent la refonte du client :
-
-- **Transfert de message** — `POST /api/messages/forward`, trame `forward`. Le
-  message transféré crédite **le premier auteur**, jamais le dernier relais, et
-  un fichier voyage en copie plutôt qu'en seconde référence : deux messages qui
-  partageraient un fichier s'emporteraient l'un l'autre au premier retrait.
-- **Messages épinglés** — `POST /api/pins`, trames `pin` / `unpin`, événement
-  `pinned`. Les épingles sont calculées **par lecteur** : quelqu'un arrivé hier
-  dans un groupe ne reçoit pas, par une épingle, ce qui s'est dit avant lui. Un
-  message retiré emporte son épingle.
-- **Brouillons synchronisés** — `POST /api/drafts`, trame `draft`. Rangé sur la
-  ligne de participation, donc par personne et par conversation. Il ne repart
-  que vers **vos propres autres appareils** : une demi-phrase n'est pas quelque
-  chose à montrer à la personne à qui on écrit.
 
 ## Sécurité
 
@@ -247,7 +243,7 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 176 tests : 132 côté serveur, 44 côté client
+npm test                   # 184 tests : 132 côté serveur, 52 côté client
 npm run typecheck          # serveur et client
 ```
 
@@ -269,7 +265,9 @@ casse en silence —
 la file d'attente hors ligne, le repli exponentiel, la reprise au réveil de
 l'onglet, le remplacement du message optimiste par son écho, la déduplication,
 et le fait qu'une correction ne re-trie pas la liste ni ne marque quoi que ce
-soit comme non lu.
+soit comme non lu — plus le transfert, les épingles et les brouillons, où la
+règle est la même partout : **le client demande, le serveur tranche**, et rien
+n'est deviné localement.
 
 En production le serveur sert `client/dist` : une seule origine, donc aucun CORS
 à configurer.

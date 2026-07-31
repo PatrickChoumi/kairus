@@ -162,6 +162,12 @@ export function Rail({ onOpen, dimmed }: Props) {
                       <span className="row__last">
                         {stirring ? (
                           <em className="row__stirring">écrit…</em>
+                        ) : conversation.draft && conversation.id !== open ? (
+                          /* What you left half-written outranks what was said:
+                             it is the thing you have to come back and finish. */
+                          <>
+                            <span className="row__draft">Brouillon :</span> {conversation.draft}
+                          </>
                         ) : last ? (
                           <>
                             {mine && <span className="row__you">vous : </span>}
