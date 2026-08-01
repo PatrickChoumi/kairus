@@ -119,7 +119,8 @@ export function Bubble({
       <div className="bubble">
         {author && <span className="bubble__author">{author}</span>}
 
-        {message.forwarded && !gone && (
+        {/* Forwarding your own words credits you, which is not news to you. */}
+        {message.forwarded && message.forwarded.from.id !== message.senderId && !gone && (
           <span className="bubble__from">
             <Icon name="forward" size={13} />
             transféré de {message.forwarded.from.name}

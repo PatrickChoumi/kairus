@@ -335,8 +335,10 @@ server/
   test/            node:test, base en mémoire, serveur réel sur port éphémère
 ```
 
-Le client pèse environ 57 ko compressés, dépendances comprises. Pas de
-bibliothèque d'animation, pas de framework CSS, pas de routeur : il n'y a
+Le client pèse **78 ko compressés** — 71,5 ko de JavaScript et 6,6 ko de CSS,
+dépendances comprises. Le chiffre sort de `npm run build --prefix client`, qui
+l'imprime : il se regénère à chaque changement plutôt que de se recopier. Pas
+de bibliothèque d'animation, pas de framework CSS, pas de routeur : il n'y a
 qu'une seule surface, donc il n'y a rien à router.
 
 ### L'API HTTP
@@ -381,17 +383,44 @@ Rien de tout cela n'est commencé, et il vaut mieux le savoir avant de compter
 dessus :
 
 - **Chiffrement de bout en bout.** Les messages sont en clair dans SQLite.
-  Kairus protège l'accès, pas le contenu.
-- **Messages vocaux.** Les fichiers passent, mais rien n'enregistre.
-- **Modération.** Le blocage existe désormais, mais il n'y a ni signalement, ni
+  Kairus protège l'accès, pas le contenu. Les appels sont chiffrés en
+  transport (DTLS-SRTP), ce qui protège du réseau, pas du serveur.
+- **Modération.** Le blocage existe, mais il n'y a ni signalement, ni
   administration, ni recours.
 - **Mise à l'échelle horizontale.** Le hub temps réel et les compteurs de
   limitation vivent dans le processus, la base est un fichier local : deux
   instances cesseraient de se voir. C'est un plafond d'architecture, pas un
   réglage.
-- **Second facteur** et vérification des phrases secrètes contre les fuites.
-- **Alerting.** Il y a désormais des journaux structurés et des compteurs, mais
-  rien ne vous réveille : il faut brancher un collecteur dessus.
-- **Récupération par email.** Toujours pas. Perdre la phrase de secours en même
-  temps que la phrase secrète reste sans recours.
-- **Appels.**
+- **Second facteur** et vérification des phrases secrètes contre les fuites
+  connues. Le minimum est de huit caractères, sans autre contrainte.
+- **Alerting.** Il y a des journaux structurés et des compteurs, mais rien ne
+  vous réveille : il faut brancher un collecteur dessus.
+- **Récupération par email.** Perdre la phrase de secours en même temps que la
+  phrase secrète reste sans recours.
+- **Appels de groupe et vidéo.** Les appels sont à deux, et audio seulement.
+- **Tests d'interface.** Les tests client couvrent l'état, le lien temps réel
+  et les notifications — pas les composants React. Ce que l'utilisateur touche
+  vraiment n'est vérifié qu'à la main, dans un navigateur, à chaque
+  changement. C'est le trou le plus large de la couverture.
+- **Restauration de sauvegarde.** Les instantanés sont pris et testés ; la
+  procédure de restauration est documentée dans `DEPLOY.md` mais n'a jamais
+  été rejouée automatiquement. Une sauvegarde qu'on n'a jamais restaurée est
+  un espoir, pas une sauvegarde.
+- **Test de charge.** L'affirmation « une instance tient quelques milliers
+  d'utilisateurs » est une estimation, pas une mesure.
+- **Internationalisation.** L'interface est en français, en dur.
+
+---
+
+## Journal des corrections de ce document
+
+Ce fichier a menti une fois : il a listé les messages vocaux et les appels
+comme « pas commencés » alors qu'ils étaient construits, testés et en service.
+La cause était bête — les sections ont été mises à jour une par une, jamais
+relues ensemble. Pour un document qui se vend sur l'honnêteté de ses limites,
+c'est le seul endroit où l'erreur n'est pas rattrapable par le lecteur.
+
+La règle depuis : **toute fonctionnalité ajoutée se relit dans les deux
+sens** — ce qu'on ajoute à « ce qui marche » doit disparaître de « ce qui n'y
+est pas », et les chiffres cités (poids du bundle, nombre de tests) se
+regénèrent, ils ne se recopient pas.

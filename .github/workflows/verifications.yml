@@ -1,0 +1,86 @@
+name: Vérifications
+
+# Ce dépôt a vécu sans intégration continue jusqu'ici : 184 tests qui ne
+# tournent que lorsque quelqu'un pense à les lancer ne protègent personne.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  # Utile après une mise à jour de dépendances : les avis de sécurité
+  # apparaissent sans que le code ait bougé.
+  schedule:
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  serveur:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Tests
+        run: npm test
+
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+      - name: Tests
+        run: npm test
+      # Le chiffre annoncé dans le README doit rester vérifiable.
+      - name: Poids du bundle
+        run: |
+          gzip -c dist/assets/*.js | wc -c | awk '{printf "JS  : %.1f ko gzip\\n", $1/1024}'
+          gzip -c dist/assets/*.css | wc -c | awk '{printf "CSS : %.1f ko gzip\\n", $1/1024}'
+
+  dependances:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Les outils de développement ne partent pas en production, mais une
+      # faille qui traîne des mois est le signe que personne ne regarde.
+      - name: Avis de sécurité — serveur
+        run: npm audit --audit-level=high --prefix server
+      - name: Avis de sécurité — client
+        run: npm audit --audit-level=high --prefix client
+
+  conteneur:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Ce qui est déployé est l'image, pas les deux paquets séparément :
+      # elle doit se construire à chaque changement, pas seulement le jour du
+      # déploiement.
+      - name: Construire l'image
+        run: docker build -t kairus:${{ github.sha }} .
