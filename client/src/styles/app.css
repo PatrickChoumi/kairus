@@ -317,7 +317,27 @@
 .keepsake__acts {
   display: flex;
   justify-content: center;
+  gap: 18px;
   margin-block: 12px 24px;
+}
+
+.keepsake__copy {
+  text-decoration: none;
+}
+
+/* The escape hatch, said where it matters rather than in a manual. */
+.keepsake .threshold__ways {
+  margin-block-start: 14px;
+  justify-content: center;
+}
+
+.keepsake__aside {
+  margin-block-start: 22px;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--hair);
+  font-size: var(--text-meta);
+  line-height: 1.55;
+  color: var(--ink-faint);
 }
 
 .keepsake__vow {

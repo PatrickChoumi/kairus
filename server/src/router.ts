@@ -16,6 +16,12 @@ import {
   findMessageConversation,
   findUserRow,
   forwardMessage,
+  beginTotp,
+  clearTotp,
+  confirmTotp,
+  recoverAccount,
+  requiresCode,
+  totpState,
   isBlocked,
   isHandle,
   isParticipant,
@@ -47,6 +53,8 @@ import {
   type Revision,
 } from './model.js'
 import { shouldRenew, sign, verify } from './token.js'
+import { mintSecret, otpauthUri, readableSecret, verifyCode } from './totp.js'
+import { timesBreached } from './breached.js'
 import { hub } from './realtime.js'
 import {
   forgetSubscription,
@@ -76,6 +84,12 @@ export class HttpError extends Error {
     message: string,
     /** Seconds to wait, for the 429 case. */
     readonly retryAfter?: number,
+    /**
+     * A machine-readable marker, for the refusals a client has to act on
+     * rather than merely display — `code` means "the passphrase was right,
+     * now the second factor".
+     */
+    readonly kind?: 'code',
   ) {
     super(message)
   }
@@ -175,10 +189,23 @@ const field = (body: unknown, key: string): string => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-const PASSPHRASE_MIN = 8
-const requirePassphrase = (value: string): string => {
+const PASSPHRASE_MIN = 10
+
+/**
+ * A length alone stops nothing — "password" is eight characters. The length
+ * is the cheap half; the other half asks whether this exact string is already
+ * in the public dumps, without ever sending it anywhere.
+ */
+async function requirePassphrase(value: string): Promise<string> {
   if (value.length < PASSPHRASE_MIN) {
-    throw new HttpError(400, 'une phrase secrète fait au moins 8 caractères')
+    throw new HttpError(400, `une phrase secrète fait au moins ${PASSPHRASE_MIN} caractères`)
+  }
+  const verdict = await timesBreached(value)
+  if (verdict.breached) {
+    throw new HttpError(
+      400,
+      `cette phrase apparaît dans des fuites connues (${verdict.times.toLocaleString('fr-FR')} fois) — choisissez-en une autre`,
+    )
   }
   return value
 }
@@ -513,10 +540,66 @@ const authed: Record<string, Handler> = {
     if (!row || !(await verifyPassword(row, field(body, 'current')))) {
       throw new HttpError(401, 'phrase secrète actuelle incorrecte')
     }
-    const version = await replacePassword(userId, requirePassphrase(field(body, 'next')))
+    const version = await replacePassword(userId, await requirePassphrase(field(body, 'next')))
     // Every other session is now invalid, including this user's other devices.
     hub.evict(userId, version)
     return { token: sign(userId, version) }
+  },
+
+  /* -- the second factor -------------------------------------------------- */
+
+  'GET /api/account/totp': ({ userId }) => {
+    const state = totpState(userId)
+    return { on: state.on, started: state.started }
+  },
+
+  /**
+   * Mints a secret and hands it over. Nothing is in force yet: it becomes
+   * real only once a code proves the authenticator actually holds it, so a
+   * mistyped setup cannot lock anyone out of their own account.
+   */
+  'POST /api/account/totp/begin': async ({ userId, body }) => {
+    const row = findUserRow(userId)
+    if (!row || !(await verifyPassword(row, field(body, 'password')))) {
+      throw new HttpError(401, 'phrase secrète incorrecte')
+    }
+    const secret = mintSecret()
+    beginTotp(userId, secret)
+    return {
+      secret,
+      readable: readableSecret(secret),
+      uri: otpauthUri(row.handle, secret),
+    }
+  },
+
+  'POST /api/account/totp/confirm': ({ userId, body }) => {
+    const state = totpState(userId)
+    if (!state.secret) throw new HttpError(409, 'rien à confirmer')
+    spend(limits.code, userId, 'trop de codes essayés')
+    if (!verifyCode(state.secret, field(body, 'code'))) {
+      throw new HttpError(400, 'ce code n’est pas le bon')
+    }
+    limits.code.clear(userId)
+    confirmTotp(userId)
+    return { on: true }
+  },
+
+  /** Turning it off asks for both halves, exactly as signing in would. */
+  'POST /api/account/totp/off': async ({ userId, body }) => {
+    const row = findUserRow(userId)
+    if (!row || !(await verifyPassword(row, field(body, 'password')))) {
+      throw new HttpError(401, 'phrase secrète incorrecte')
+    }
+    const state = totpState(userId)
+    if (state.on) {
+      spend(limits.code, userId, 'trop de codes essayés')
+      if (!verifyCode(state.secret, field(body, 'code'))) {
+        throw new HttpError(400, 'ce code n’est pas le bon')
+      }
+      limits.code.clear(userId)
+    }
+    clearTotp(userId)
+    return { on: false }
   },
 
   'POST /api/account/recovery': async ({ userId }) => ({
@@ -538,7 +621,7 @@ const anonymous: Record<string, Handler> = {
     if (!isHandle(handle)) {
       throw new HttpError(400, 'un nom d’usage fait 3 à 20 caractères : a–z, 0–9, _')
     }
-    requirePassphrase(field(body, 'password'))
+    await requirePassphrase(field(body, 'password'))
     if (findUserByHandle(handle)) throw new HttpError(409, 'ce nom est déjà pris')
     const { user, recoveryPhrase } = await createUser(handle, name, field(body, 'password'))
     return { token: sign(user.id, 0), user, recoveryPhrase }
@@ -555,6 +638,23 @@ const anonymous: Record<string, Handler> = {
     if (!row || !(await verifyPassword(row, field(body, 'password')))) {
       throw new HttpError(401, 'nom ou phrase secrète incorrecte')
     }
+    /*
+     * The passphrase was right. If there is a second factor, that is only
+     * half the answer — and saying so is safe: an attacker who got this far
+     * already knows the passphrase works.
+     */
+    if (requiresCode(row)) {
+      const given = field(body, 'code')
+      if (!given) throw new HttpError(401, 'code à six chiffres requis', undefined, 'code')
+      // Codes are guessable in a way passphrases are not — a million of them,
+      // and only six digits. This limit is the whole defence.
+      spend(limits.code, row.id, 'trop de codes essayés')
+      if (!verifyCode(totpState(row.id).secret, given)) {
+        throw new HttpError(401, 'ce code n’est pas le bon', undefined, 'code')
+      }
+      limits.code.clear(row.id)
+    }
+
     // A genuine sign-in clears the suspicion it was accumulating.
     limits.signInFromAddress.clear(address)
     limits.signInToHandle.clear(handle)
@@ -571,9 +671,12 @@ const anonymous: Record<string, Handler> = {
     if (!row || !(await verifyRecoveryPhrase(row, field(body, 'phrase')))) {
       throw new HttpError(401, 'nom ou phrase de secours incorrecte')
     }
-    const version = await replacePassword(row.id, requirePassphrase(field(body, 'password')))
+    const version = await replacePassword(row.id, await requirePassphrase(field(body, 'password')))
     // The phrase that was just used is spent; a new one takes its place.
     const recoveryPhrase = await replaceRecoveryPhrase(row.id)
+    // Whoever is recovering has the phrase and nothing else: leaving the
+    // second factor standing would make this a door onto a wall.
+    recoverAccount(row.id)
     hub.evict(row.id, version)
     limits.recover.clear(address)
     limits.recover.clear(handle)
@@ -620,7 +723,11 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
     } catch (error) {
       if (error instanceof HttpError) {
         if (error.retryAfter) res.setHeader('retry-after', String(error.retryAfter))
-        json(res, error.status, { error: error.message, retryAfter: error.retryAfter })
+        json(res, error.status, {
+        error: error.message,
+        retryAfter: error.retryAfter,
+        ...(error.kind ? { kind: error.kind } : {}),
+      })
       } else {
         count('http.status.500')
         log.error('files.failed', { error: String(error) })
@@ -660,7 +767,11 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
         log.warn('http.throttled', { route: key, address, retryAfter: error.retryAfter })
       }
       count(`http.status.${error.status}`)
-      json(res, error.status, { error: error.message, retryAfter: error.retryAfter })
+      json(res, error.status, {
+        error: error.message,
+        retryAfter: error.retryAfter,
+        ...(error.kind ? { kind: error.kind } : {}),
+      })
     } else {
       count('http.status.500')
       log.error('http.failed', {

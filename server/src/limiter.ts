@@ -88,6 +88,12 @@ export const limits = {
   signUp: new Limiter(5, 5 / 60),
   /** Trying recovery phrases. */
   recover: new Limiter(5, 5 / 60),
+  /**
+   * Trying six-digit codes. There are only a million of them and a third of
+   * a minute to use each one, so this limit — not the code — is what makes a
+   * second factor worth having.
+   */
+  code: new Limiter(5, 5 / 10),
 
   /** Saying things: a burst of 25, then one a second. */
   write: new Limiter(25, 60),

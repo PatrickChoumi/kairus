@@ -24,7 +24,11 @@ db.exec(`
     -- Bumped whenever every existing session must stop being accepted.
     token_version INTEGER NOT NULL DEFAULT 0,
     -- Hash of the one-time phrase that can take an account back.
-    recovery_hash TEXT NOT NULL DEFAULT ''
+    recovery_hash TEXT NOT NULL DEFAULT '',
+    -- Base32 shared secret for the second factor. Empty means it is off; set
+    -- with no totp_at means someone started and never finished.
+    totp_secret   TEXT NOT NULL DEFAULT '',
+    totp_at       INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS conversations (
@@ -143,6 +147,8 @@ function ensureColumn(table: string, column: string, definition: string): void {
 
 ensureColumn('users', 'token_version', 'INTEGER NOT NULL DEFAULT 0')
 ensureColumn('users', 'recovery_hash', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('users', 'totp_secret', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('users', 'totp_at', 'INTEGER')
 ensureColumn('conversations', 'kind', "TEXT NOT NULL DEFAULT 'direct'")
 ensureColumn('conversations', 'title', 'TEXT')
 ensureColumn('conversations', 'created_by', 'TEXT')

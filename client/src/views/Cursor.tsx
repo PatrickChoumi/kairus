@@ -68,6 +68,10 @@ export function Cursor() {
   const changePassphrase = useStore((s) => s.changePassphrase)
   const mintRecoveryPhrase = useStore((s) => s.mintRecoveryPhrase)
   const revokeEverywhere = useStore((s) => s.revokeEverywhere)
+  const factor = useStore((s) => s.factor)
+  const loadFactor = useStore((s) => s.loadFactor)
+  const armFactor = useStore((s) => s.armFactor)
+  const disarmFactor = useStore((s) => s.disarmFactor)
 
   const [query, setQuery] = useState('')
   const [people, setPeople] = useState<User[]>([])
@@ -117,9 +121,11 @@ export function Cursor() {
     setQuery(seed)
     void loadBlocked()
     void refreshPush()
+    // The command reads "activer" or "désactiver" depending on the answer.
+    void loadFactor()
     const id = requestAnimationFrame(() => field.current?.focus())
     return () => cancelAnimationFrame(id)
-  }, [shown, seed, loadBlocked, refreshPush])
+  }, [shown, seed, loadBlocked, refreshPush, loadFactor])
 
   // Remote lookups are debounced; local matches are instant.
   useEffect(() => {
@@ -342,6 +348,32 @@ export function Cursor() {
             ],
             run: ([current, next]) => changePassphrase(current ?? '', next ?? ''),
           }),
+      },
+      {
+        key: 'x:factor',
+        group: 'réglages',
+        label: factor
+          ? 'désactiver la double authentification'
+          : 'activer la double authentification',
+        hint: factor ? 'un code sera de nouveau inutile' : 'un code en plus de la phrase secrète',
+        keeps: true,
+        run: () =>
+          setQuest(
+            factor
+              ? {
+                  title: 'désactiver la double authentification',
+                  steps: [
+                    { label: 'phrase secrète', secret: true },
+                    { label: 'le code affiché maintenant' },
+                  ],
+                  run: ([password, code]) => disarmFactor(password ?? '', code ?? ''),
+                }
+              : {
+                  title: 'activer la double authentification',
+                  steps: [{ label: 'phrase secrète', secret: true }],
+                  run: ([password]) => armFactor(password ?? ''),
+                },
+          ),
       },
       {
         key: 'x:recovery',

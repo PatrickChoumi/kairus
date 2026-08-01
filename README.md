@@ -112,6 +112,12 @@ eux**, à la même teinte, de sorte qu'on reconnaît le même produit.
   l'onglet fermé. Onglet simplement caché, c'est la page elle-même qui le dit.
 - **Journaux structurés et compteurs** : une ligne de JSON par événement, et un
   point de mesure derrière un jeton
+- **Double authentification (TOTP)** : un code à six chiffres en plus de la
+  phrase secrète, compatible avec n'importe quelle application
+  d'authentification. Le secret n'entre en vigueur qu'une fois un code vérifié
+  — une installation ratée n'enferme personne dehors. Le champ de code
+  n'apparaît qu'une fois la phrase secrète acceptée : ceux qui n'ont pas de
+  second facteur ne voient jamais rien de tout cela
 - Clavier de bout en bout : `⌘K`, `↑`/`↓` ou `j`/`k`, `Entrée`, `Échap`, et `↑`
   dans un champ vide pour reprendre son dernier message
 
@@ -213,10 +219,29 @@ Le trajet direct n'est en revanche **pas chiffré de bout en bout au sens de
 Signal** : WebRTC chiffre le transport (DTLS-SRTP), ce qui protège du réseau,
 pas d'un serveur qui aurait été remplacé par un autre.
 
-**Ce qui n'existe toujours pas.** Pas de second facteur, et une phrase secrète
-n'a d'autre contrainte que huit caractères — pas de vérification contre les
-fuites connues. C'est en dessous de ce qu'on attend en 2026. Les appels de
-groupe et la vidéo ne sont pas là non plus.
+**Second facteur.** TOTP, écrit ici plutôt qu'importé : soixante lignes de
+HMAC et de base32, et une dépendance qui touche à l'authentification est une
+dépendance qu'il faut croire pour toujours. La fenêtre tolère une horloge
+décalée d'un pas de trente secondes, pas davantage. Ce qui rend un code à six
+chiffres utile n'est pas le code — il n'y en a qu'un million — mais le seau de
+jetons qui limite les essais ; c'est lui, la défense.
+
+Il n'y a **pas de liste de codes de secours**, volontairement : Kairus a déjà
+une porte de sortie, la phrase de secours, et une seconde liste de secrets à
+perdre serait une seconde façon de perdre le compte. Reprendre le compte avec
+la phrase désactive le second facteur — sinon la récupération serait une porte
+qui ouvre sur un mur.
+
+**Phrases secrètes déjà publiques.** Dix caractères au minimum, et surtout un
+contrôle contre les fuites connues : la phrase est hachée en SHA-1 et seuls
+les **cinq premiers caractères hexadécimaux** du hachage partent chez Have I
+Been Pwned, qui renvoie tous les suffixes correspondants ; la comparaison se
+fait ici. Ni la phrase ni son hachage complet ne quittent le processus. Le
+contrôle **échoue ouvert** : une panne chez un tiers ne doit pas empêcher de
+créer un compte, et `BREACH_CHECK=off` le désactive pour un serveur sans
+réseau sortant.
+
+**Ce qui n'existe toujours pas.** Les appels de groupe et la vidéo.
 
 ---
 
@@ -243,12 +268,15 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 247 tests : 133 côté serveur, 114 côté client
+npm test                   # 267 tests : 153 côté serveur, 114 côté client
 npm run typecheck          # serveur et client
 ```
 
 **Serveur** (`node:test`, serveur réel, base en mémoire) : limitation de débit,
-révocation de jeton, récupération de compte, permissions sur les messages — on
+révocation de jeton, récupération de compte, second facteur — la fenêtre de
+dérive, le code qui ne suffit pas sans la phrase, les essais ralentis, et la
+récupération qui lève le facteur —, phrases divulguées — seul le préfixe du
+hachage sort, et une panne laisse passer —, permissions sur les messages — on
 ne réécrit pas les mots d'un autre —, recherche et sa robustesse, blocage,
 en-têtes de sécurité, sauvegardes, abonnements push et compteurs, pièces
 jointes — qui peut les lire, ce qui n'est jamais affiché en place, ce qui est
@@ -397,8 +425,6 @@ dessus :
   limitation vivent dans le processus, la base est un fichier local : deux
   instances cesseraient de se voir. C'est un plafond d'architecture, pas un
   réglage.
-- **Second facteur** et vérification des phrases secrètes contre les fuites
-  connues. Le minimum est de huit caractères, sans autre contrainte.
 - **Alerting.** Il y a des journaux structurés et des compteurs, mais rien ne
   vous réveille : il faut brancher un collecteur dessus.
 - **Récupération par email.** Perdre la phrase de secours en même temps que la

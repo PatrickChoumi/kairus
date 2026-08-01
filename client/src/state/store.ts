@@ -42,11 +42,15 @@ type State = {
   notice: string | null
   /** Shown once, right after it is minted, and never recoverable afterwards. */
   keepsake: string | null
+  /** Whether a second factor stands between the passphrase and the account. */
+  factor: boolean
+  /** The secret being set up, while it is being set up. */
+  arming: { secret: string; readable: string; uri: string } | null
 }
 
 type Actions = {
   boot: () => Promise<void>
-  signIn: (handle: string, password: string) => Promise<void>
+  signIn: (handle: string, password: string, code?: string) => Promise<void>
   signUp: (handle: string, name: string, password: string) => Promise<void>
   signOut: () => void
 
@@ -89,6 +93,13 @@ type Actions = {
   block: (handle: string) => Promise<void>
   unblock: (handle: string) => Promise<void>
   loadBlocked: () => Promise<void>
+
+  loadFactor: () => Promise<void>
+  /** Mints a secret. Nothing is in force until `confirmFactor` proves it arrived. */
+  armFactor: (password: string) => Promise<void>
+  confirmFactor: (code: string) => Promise<void>
+  disarmFactor: (password: string, code: string) => Promise<void>
+  dropArming: () => void
 
   recover: (handle: string, phrase: string, password: string) => Promise<void>
   changePassphrase: (current: string, next: string) => Promise<void>
@@ -391,6 +402,8 @@ export const useStore = create<State & Actions>((set, get) => {
     cursorSeed: '',
     notice: null,
     keepsake: null,
+    factor: false,
+    arming: null,
 
     async boot() {
       const token = getToken()
@@ -409,8 +422,8 @@ export const useStore = create<State & Actions>((set, get) => {
       }
     },
 
-    async signIn(handle, password) {
-      const { token, user } = await api.login(handle.toLowerCase(), password)
+    async signIn(handle, password, code) {
+      const { token, user } = await api.login(handle.toLowerCase(), password, code)
       land(token, user)
     },
 
@@ -502,10 +515,47 @@ export const useStore = create<State & Actions>((set, get) => {
       }
     },
 
+    async loadFactor() {
+      try {
+        const { on } = await api.totpState()
+        set({ factor: on })
+      } catch {
+        // Not knowing is not worth a notice; the command simply offers both.
+      }
+    },
+
+    async armFactor(password) {
+      try {
+        const arming = await api.totpBegin(password)
+        set({ arming, cursor: false })
+      } catch (error) {
+        set({ notice: error instanceof ApiError ? error.message : 'impossible pour l’instant' })
+      }
+    },
+
+    async confirmFactor(code) {
+      await api.totpConfirm(code)
+      set({ arming: null, factor: true, notice: 'la double authentification est active' })
+    },
+
+    async disarmFactor(password, code) {
+      try {
+        await api.totpOff(password, code)
+        set({ factor: false, cursor: false, notice: 'la double authentification est désactivée' })
+      } catch (error) {
+        set({ notice: error instanceof ApiError ? error.message : 'impossible pour l’instant' })
+      }
+    },
+
+    dropArming() {
+      set({ arming: null })
+    },
+
     async recover(handle, phrase, password) {
       const { token, user, recoveryPhrase } = await api.recover(handle.toLowerCase(), phrase, password)
       land(token, user)
-      set({ keepsake: recoveryPhrase })
+      // The server lifts the second factor on recovery; this side must agree.
+      set({ keepsake: recoveryPhrase, factor: false, arming: null })
     },
 
     async changePassphrase(current, next) {
@@ -557,6 +607,8 @@ export const useStore = create<State & Actions>((set, get) => {
         reading: false,
         keepsake: null,
         blocked: [],
+        factor: false,
+        arming: null,
       })
     },
 

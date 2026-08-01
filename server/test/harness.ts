@@ -8,6 +8,9 @@
 process.env.NODE_ENV = 'test'
 process.env.JWT_SECRET ??= 'a-secret-that-only-the-tests-use'
 process.env.DATA_DIR = ':memory:'
+// The breach check reaches a third party; the tests must not depend on it
+// being up, and `breached.test.ts` exercises it directly with a stubbed fetch.
+process.env.BREACH_CHECK = 'off'
 // Attachments are real bytes on a real disk even when the database is not.
 process.env.MAX_UPLOAD_BYTES ??= String(8 * 1024 * 1024)
 

@@ -17,6 +17,11 @@ export class ApiError extends Error {
     readonly status = 0,
     /** Seconds to wait, when the server asked us to slow down. */
     readonly retryAfter?: number,
+    /**
+     * A refusal the interface has to act on rather than merely show —
+     * `code` means the passphrase was right and a second factor is next.
+     */
+    readonly kind?: 'code',
   ) {
     super(message)
   }
@@ -49,7 +54,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const message =
       typeof payload.error === 'string' ? payload.error : 'quelque chose n’a pas fonctionné'
     const retryAfter = typeof payload.retryAfter === 'number' ? payload.retryAfter : undefined
-    throw new ApiError(message, response.status, retryAfter)
+    const kind = payload.kind === 'code' ? 'code' : undefined
+    throw new ApiError(message, response.status, retryAfter, kind)
   }
   return payload as T
 }
@@ -70,10 +76,10 @@ export const api = {
       body: JSON.stringify({ handle, name, password }),
     }),
 
-  login: (handle: string, password: string) =>
+  login: (handle: string, password: string, code?: string) =>
     request<{ token: string; user: User }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ handle, password }),
+      body: JSON.stringify({ handle, password, ...(code ? { code } : {}) }),
     }),
 
   /** The way back in when the passphrase is gone. */
@@ -91,6 +97,29 @@ export const api = {
 
   newRecoveryPhrase: () =>
     request<{ recoveryPhrase: string }>('/api/account/recovery', { method: 'POST' }),
+
+  /* -- the second factor -------------------------------------------------- */
+
+  totpState: () => request<{ on: boolean; started: boolean }>('/api/account/totp'),
+
+  /** Mints a secret. Nothing is in force until a code confirms it. */
+  totpBegin: (password: string) =>
+    request<{ secret: string; readable: string; uri: string }>('/api/account/totp/begin', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+
+  totpConfirm: (code: string) =>
+    request<{ on: boolean }>('/api/account/totp/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
+
+  totpOff: (password: string, code: string) =>
+    request<{ on: boolean }>('/api/account/totp/off', {
+      method: 'POST',
+      body: JSON.stringify({ password, code }),
+    }),
 
   revokeSessions: () => request<{ token: string }>('/api/account/revoke', { method: 'POST' }),
 

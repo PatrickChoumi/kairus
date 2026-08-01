@@ -56,6 +56,8 @@ type UserRow = User & {
   recovery_hash: string
   token_version: number
   created_at: number
+  totp_secret: string
+  totp_at: number | null
 }
 
 type MessageRow = {
@@ -232,6 +234,15 @@ export async function replacePassword(id: string, password: string): Promise<num
   return tokenVersionOf(id)
 }
 
+/**
+ * Taking an account back lifts the second factor with it. Someone who has
+ * lost their authenticator has the phrase and nothing else; leaving the
+ * factor standing would make recovery a door that opens onto a wall.
+ */
+export function recoverAccount(id: string): void {
+  clearTotp(id)
+}
+
 /** Issues a fresh recovery phrase, retiring the previous one. */
 export async function replaceRecoveryPhrase(id: string): Promise<string> {
   const phrase = mintRecoveryPhrase()
@@ -291,6 +302,48 @@ export function searchUsers(query: string, viewerId: string, limit = 8): User[] 
 
   if (!stranger || known.some((u) => u.id === stranger.id)) return known
   return [...known, stranger]
+}
+
+/* ------------------------------------------------------------ second factor */
+
+/**
+ * The second factor.
+ *
+ * A secret is minted first and only becomes real once a code proves the
+ * authenticator holds it — otherwise a mistyped setup would lock someone out
+ * of their own account with no way back.
+ *
+ * There is deliberately no separate set of backup codes. Kairus already has
+ * one escape hatch, the recovery phrase, and it already ends every session; a
+ * second list of secrets to lose would be a second way to lose the account.
+ * Taking the account back with the phrase turns the second factor off.
+ */
+export const totpState = (id: string): { secret: string; on: boolean; started: boolean } => {
+  const row = db.prepare(`SELECT totp_secret, totp_at FROM users WHERE id = ?`).get(id) as
+    | { totp_secret: string; totp_at: number | null }
+    | undefined
+  return {
+    secret: row?.totp_secret ?? '',
+    on: Boolean(row?.totp_secret && row.totp_at),
+    started: Boolean(row?.totp_secret && !row.totp_at),
+  }
+}
+
+export const requiresCode = (row: UserRow): boolean =>
+  Boolean(row.totp_secret && row.totp_at)
+
+/** Stores a secret that is not in force yet. */
+export function beginTotp(id: string, secret: string): void {
+  db.prepare(`UPDATE users SET totp_secret = ?, totp_at = NULL WHERE id = ?`).run(secret, id)
+}
+
+/** Turns it on. Only ever called once a code has been checked against it. */
+export function confirmTotp(id: string): void {
+  db.prepare(`UPDATE users SET totp_at = ? WHERE id = ? AND totp_secret != ''`).run(Date.now(), id)
+}
+
+export function clearTotp(id: string): void {
+  db.prepare(`UPDATE users SET totp_secret = '', totp_at = NULL WHERE id = ?`).run(id)
 }
 
 /* ----------------------------------------------------------------- blocks */

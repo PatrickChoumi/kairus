@@ -25,6 +25,13 @@ export function Threshold() {
   const [phrase, setPhrase] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /*
+   * The field only appears once the server says the passphrase was right and
+   * a second factor is next. Asking everyone for a code they mostly do not
+   * have would be a worse door for the sake of a minority.
+   */
+  const [code, setCode] = useState('')
+  const [needsCode, setNeedsCode] = useState(false)
 
   const panel = useRef<HTMLDivElement>(null)
   const [arrived, setArrived] = useState(false)
@@ -47,10 +54,15 @@ export function Threshold() {
     setError(null)
     setBusy(true)
     try {
-      if (mode === 'enter') await signIn(handle, password)
+      if (mode === 'enter') await signIn(handle, password, code || undefined)
       else if (mode === 'create') await signUp(handle, name, password)
       else await recover(handle, phrase, password)
     } catch (problem) {
+      if (problem instanceof ApiError && problem.kind === 'code') {
+        setNeedsCode(true)
+        // Only clear it when there was one to be wrong about.
+        if (code) setCode('')
+      }
       const message =
         problem instanceof ApiError ? problem.message : 'impossible de continuer'
       const wait =
@@ -65,6 +77,8 @@ export function Threshold() {
   const go = (next: Mode) => {
     setMode(next)
     setError(null)
+    setNeedsCode(false)
+    setCode('')
   }
 
   return (
@@ -117,6 +131,22 @@ export function Threshold() {
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
+                required
+              />
+            </label>
+          )}
+
+          {mode === 'enter' && needsCode && (
+            <label className="field">
+              <span className="field__mark">#</span>
+              <input
+                className="field__input"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="code à six chiffres"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
                 required
               />
             </label>
