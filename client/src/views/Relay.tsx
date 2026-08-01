@@ -53,6 +53,23 @@ export function Relay() {
     return () => cancelAnimationFrame(id)
   }, [shown])
 
+  /*
+   * Escape closes it wherever the focus happens to be. Hanging that off the
+   * field alone would mean a click on a row — which moves focus — quietly
+   * takes the escape hatch away.
+   */
+  useEffect(() => {
+    if (!shown) return
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      relay(null)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [shown, relay])
+
   const matches = useMemo(() => {
     const term = query.trim()
     return conversations.filter((c) => !term || fits(c.face.name, term))

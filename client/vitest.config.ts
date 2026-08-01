@@ -5,7 +5,8 @@ export default defineConfig({
     // The code under test reaches for localStorage, matchMedia and document.
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],
-    include: ['src/**/*.test.ts'],
+    // .tsx too, now that the components themselves are under test.
+    include: ['src/**/*.test.{ts,tsx}'],
     restoreMocks: true,
   },
 })

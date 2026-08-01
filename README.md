@@ -243,7 +243,7 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 184 tests : 132 côté serveur, 52 côté client
+npm test                   # 247 tests : 133 côté serveur, 114 côté client
 npm run typecheck          # serveur et client
 ```
 
@@ -252,16 +252,22 @@ révocation de jeton, récupération de compte, permissions sur les messages —
 ne réécrit pas les mots d'un autre —, recherche et sa robustesse, blocage,
 en-têtes de sécurité, sauvegardes, abonnements push et compteurs, pièces
 jointes — qui peut les lire, ce qui n'est jamais affiché en place, ce qui est
-balayé —, groupes — l'historique qui ne s'hérite pas, la marque de lecture qui
+balayé —, restauration de sauvegarde — un vrai serveur démarré sur un
+instantané remis en place, qui doit encore accepter les sessions d'avant —,
+groupes — l'historique qui ne s'hérite pas, la marque de lecture qui
 attend le dernier, ce qu'un tiers ne peut pas faire —, messages vocaux — la
 durée et la forme conservées, une forme d'onde forgée refusée, le son servi en
 place —, appels — la négociation relayée sans être lue, un inconnu qui ne peut
 pas faire sonner le téléphone d'autrui, le blocage qui tient dans les deux sens,
 le groupe qui refuse —, et le WebSocket sous charge et à l'éviction.
 
-**Client** (`vitest`, jsdom) : la souscription aux notifications, le lien temps
-réel et la réconciliation optimiste, c'est-à-dire les endroits où une messagerie
-casse en silence —
+**Client** (`vitest`, jsdom, Testing Library) : les composants d'abord — ce
+qu'une bulle laisse faire à un message et ce qu'elle en dit, le clavier du
+composeur, l'écran de transfert, la barre d'épingle qui compte au lieu de
+grandir, la ligne de liste et son ordre de priorité, le lecteur vocal qui ne
+télécharge rien tant qu'on n'appuie pas. Puis la souscription aux
+notifications, le lien temps réel et la réconciliation optimiste, c'est-à-dire
+les endroits où une messagerie casse en silence —
 la file d'attente hors ligne, le repli exponentiel, la reprise au réveil de
 l'onglet, le remplacement du message optimiste par son écho, la déduplication,
 et le fait qu'une correction ne re-trie pas la liste ni ne marque quoi que ce
@@ -398,14 +404,10 @@ dessus :
 - **Récupération par email.** Perdre la phrase de secours en même temps que la
   phrase secrète reste sans recours.
 - **Appels de groupe et vidéo.** Les appels sont à deux, et audio seulement.
-- **Tests d'interface.** Les tests client couvrent l'état, le lien temps réel
-  et les notifications — pas les composants React. Ce que l'utilisateur touche
-  vraiment n'est vérifié qu'à la main, dans un navigateur, à chaque
-  changement. C'est le trou le plus large de la couverture.
-- **Restauration de sauvegarde.** Les instantanés sont pris et testés ; la
-  procédure de restauration est documentée dans `DEPLOY.md` mais n'a jamais
-  été rejouée automatiquement. Une sauvegarde qu'on n'a jamais restaurée est
-  un espoir, pas une sauvegarde.
+- **Tests de bout en bout.** Les composants sont couverts un par un, mais
+  aucun test automatique ne fait parler deux navigateurs réels. Les parcours
+  complets — inscription, vocal, appel, transfert — sont rejoués à la main
+  dans Chromium à chaque changement, ce qui dépend de quelqu'un qui y pense.
 - **Test de charge.** L'affirmation « une instance tient quelques milliers
   d'utilisateurs » est une estimation, pas une mesure.
 - **Internationalisation.** L'interface est en français, en dur.

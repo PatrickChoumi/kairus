@@ -367,6 +367,13 @@ docker run --rm -v kairus-data:/data debian:stable-slim sh -c '
 docker start kairus
 ```
 
+Cette procédure est **rejouée à chaque exécution des tests**
+(`server/test/restore.test.ts`) : un instantané est pris, remis en place, et
+un vrai serveur est démarré dessus pour vérifier qu'il répond, que les
+sessions ouvertes avant la sauvegarde fonctionnent toujours, et qu'il accepte
+encore des écritures. Une sauvegarde qu'on n'a jamais restaurée n'est pas une
+sauvegarde.
+
 ---
 
 ## Mettre à jour
