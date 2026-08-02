@@ -62,8 +62,9 @@ existants : chacun devra réactiver les notifications.
 sonde `/api/health`.
 
 1. Sur [railway.app](https://railway.app) : **New Project → Deploy from GitHub
-   repo**, choisir `PatrickChoumi/kairus`, branche `claude/minimal-telegram-app-hzghz6`
-   (ou la branche que vous aurez fusionnée).
+   repo**, choisir `PatrickChoumi/kairus`, branche **`main`**.
+   Vérifiez cette branche dans **Settings → Source** : c'est la première chose
+   à regarder quand un déploiement semble ne rien changer.
 2. Railway détecte le `Dockerfile` et construit. Laissez faire.
 3. **Variables** → ajouter :
    - `JWT_SECRET` = la sortie de l'étape 1
@@ -247,8 +248,9 @@ passent par le serveur comme n'importe quelle pièce jointe.
 Remplacez `kairus.example.com`, puis passez la liste :
 
 ```bash
-# 1. Le serveur répond
-curl -s https://kairus.example.com/api/health          # {"ok":true}
+# 1. Le serveur répond, et dit quelle version il sert
+curl -s https://kairus.example.com/api/health
+# {"ok":true,"build":"1f9c1d836cc1","startedAt":...}
 
 # 2. Le client est bien servi
 curl -sI https://kairus.example.com/ | head -1         # 200
@@ -390,6 +392,34 @@ colonnes manquantes). Le volume n'est jamais touché par une reconstruction
 d'image.
 
 Sur Railway et Fly, un `git push` sur la branche suivie suffit.
+
+### « Je déploie et je vois toujours l'ancienne version »
+
+Deux causes possibles, et elles ont des remèdes opposés. Ne devinez pas :
+demandez au serveur.
+
+```bash
+curl -s https://kairus.example.com/api/health
+```
+
+Le champ `build` est l'identifiant de la construction du client. La même
+valeur est dans la page (`<meta name="kairus-build">`) et dans le nom des
+caches du service worker.
+
+- **`build` a changé mais l'écran non** → c'est votre navigateur. Le service
+  worker sert une page mise en cache. Rechargez avec `Ctrl+Shift+R`, ou
+  DevTools → Application → Service Workers → *Unregister*, puis rechargez.
+  Depuis la version qui versionne les caches, ce cas se résout tout seul au
+  deuxième chargement : l'ancien service worker est remplacé et ses caches
+  supprimés. Il pouvait rester bloqué avec les versions d'avant.
+- **`build` n'a pas changé** → l'hôte n'a pas pris le nouveau code. Vérifiez,
+  dans cet ordre : la branche suivie (**Settings → Source**, ce doit être
+  `main`), le déclenchement automatique du déploiement, et le journal de
+  construction — un build qui échoue laisse tourner l'ancien conteneur sans
+  rien signaler à l'écran.
+
+`startedAt` dit quand le processus a démarré : s'il est vieux de plusieurs
+jours après un déploiement annoncé, rien n'a redémarré.
 
 ---
 

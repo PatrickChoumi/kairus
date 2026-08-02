@@ -69,6 +69,7 @@ import {
   subscriptionCount,
 } from './push.js'
 import { asPrometheus, count, log, snapshot } from './log.js'
+import { builtVersion } from './static.js'
 import {
   attachmentOf,
   claim,
@@ -82,6 +83,9 @@ import {
   tamePeaks,
   TooLarge,
 } from './files.js'
+
+/** When this process started, so a restart is visible from outside too. */
+const startedAt = Date.now()
 
 export class HttpError extends Error {
   constructor(
@@ -754,7 +758,13 @@ const anonymous: Record<string, Handler> = {
     return { token: sign(row.id, version), user: publicUser(row), recoveryPhrase }
   },
 
-  'GET /api/health': () => ({ ok: true }),
+  /**
+   * Also says which build is answering. A deployment that looks unchanged is
+   * either a stale browser or a server that never took the new code, and
+   * those two have opposite fixes — this is what tells them apart, from
+   * outside, with one request.
+   */
+  'GET /api/health': () => ({ ok: true, build: builtVersion(), startedAt }),
 
   /**
    * The reports, for whoever runs the server. Guarded by MODERATION_TOKEN and
@@ -803,7 +813,7 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
 
   const address = addressOf(req)
   const key = `${req.method} ${url.pathname}`
-  const startedAt = performance.now()
+  const began = performance.now()
   count('http.requests')
 
   // Uploads and downloads carry bytes, not JSON, so they never reach the
@@ -877,7 +887,7 @@ export async function route(req: IncomingMessage, res: ServerResponse): Promise<
   log.debug('http', {
     route: key,
     status: res.statusCode,
-    ms: Math.round(performance.now() - startedAt),
+    ms: Math.round(performance.now() - began),
   })
   return true
 }

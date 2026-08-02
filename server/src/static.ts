@@ -16,6 +16,17 @@ const TYPES: Record<string, string> = {
 }
 
 /**
+ * Which client this process is serving.
+ *
+ * Written by the client build, read once here, and reported by /api/health.
+ * Without it, "am I looking at the version I just deployed?" can only be
+ * answered by squinting at the interface — and that question comes up on
+ * every deployment.
+ */
+let build = 'inconnu'
+export const builtVersion = (): string => build
+
+/**
  * Serves the built client when it exists. In development Vite owns this, so a
  * missing bundle is not an error — the handler simply declines.
  */
@@ -26,6 +37,11 @@ export function serveClient(root: string) {
 
   // Hashed once at boot: the shell does not change while the process runs.
   if (available) usePolicy(buildPolicy(inlineScriptHashes(readFileSync(shell, 'utf8'))))
+
+  const stamp = join(base, 'build.txt')
+  build = existsSync(stamp)
+    ? readFileSync(stamp, 'utf8').trim().slice(0, 40) || 'inconnu'
+    : 'inconnu'
 
   const handle = (req: IncomingMessage, res: ServerResponse): boolean => {
     if (!available) return false

@@ -4,10 +4,17 @@
  * The shell is cached so the app opens instantly and survives a lost network.
  * Messages are never cached: they are live data, and stale messages would be
  * worse than none.
+ *
+ * `__BUILD__` is replaced at build time by an identifier derived from the
+ * emitted file names. It matters more than it looks: with a fixed cache name,
+ * the purge below had nothing to purge, and every deployment inherited the
+ * caches of the one before it — which is how an application ends up serving
+ * an icon, or a manifest, that stopped existing months ago.
  */
 
-const SHELL = 'kairus-shell-v1'
-const RUNTIME = 'kairus-runtime-v1'
+const BUILD = '__BUILD__'
+const SHELL = `kairus-shell-${BUILD}`
+const RUNTIME = `kairus-runtime-${BUILD}`
 const PRECACHE = ['/', '/mark.svg', '/mark-maskable.svg', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
@@ -98,17 +105,43 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Build output is content-hashed, so a cache hit is always correct.
+  /*
+   * Under /assets/ the file name *is* a content hash, so a cache hit can
+   * never be wrong and the network is never worth asking.
+   */
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(request).then(
+        (hit) =>
+          hit ??
+          fetch(request).then((response) => {
+            if (response.ok && response.type === 'basic') {
+              const copy = response.clone()
+              void caches.open(RUNTIME).then((cache) => cache.put(request, copy))
+            }
+            return response
+          }),
+      ),
+    )
+    return
+  }
+
+  /*
+   * Everything else — the icons, the manifest — keeps its name from one
+   * build to the next. Serving those from the cache first was a permanent
+   * freeze: change an icon and nobody who had already visited would ever see
+   * it. The network answers first now, and the cache is only what keeps the
+   * application usable with no network at all.
+   */
   event.respondWith(
-    caches.match(request).then((hit) => {
-      if (hit) return hit
-      return fetch(request).then((response) => {
+    fetch(request)
+      .then((response) => {
         if (response.ok && response.type === 'basic') {
           const copy = response.clone()
           void caches.open(RUNTIME).then((cache) => cache.put(request, copy))
         }
         return response
       })
-    }),
+      .catch(() => caches.match(request).then((hit) => hit ?? Response.error())),
   )
 })
