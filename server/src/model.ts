@@ -304,6 +304,132 @@ export function searchUsers(query: string, viewerId: string, limit = 8): User[] 
   return [...known, stranger]
 }
 
+/* -------------------------------------------------------------- reporting */
+
+/**
+ * Reporting.
+ *
+ * Blocking already lets someone make it stop for themselves. A report is the
+ * other half: telling whoever runs the server that something happened, which
+ * blocking alone never does.
+ *
+ * It records and nothing else. There is no automatic action, no threshold at
+ * which an account disappears — a system that punishes on a count is a system
+ * anyone can aim at anyone. What it does guarantee is that the evidence
+ * survives: the words are **copied into the report**, because the person who
+ * wrote them can take them back, and a report pointing at a hole is a report
+ * nobody can act on.
+ */
+export type Report = {
+  id: string
+  reporter: Face | null
+  about: Face | null
+  conversationId: string | null
+  messageId: string | null
+  said: string
+  reason: string
+  createdAt: number
+}
+
+export type ReportRefusal = 'missing' | 'not-yours' | 'nobody' | 'yourself'
+
+export function fileReport(
+  reporterId: string,
+  target: { messageId?: string; aboutId?: string },
+  reason: string,
+): { ok: true; id: string } | { ok: false; reason: ReportRefusal } {
+  let aboutId = target.aboutId ?? null
+  let conversationId: string | null = null
+  let said = ''
+
+  if (target.messageId) {
+    const row = db.prepare(`SELECT * FROM messages WHERE id = ?`).get(target.messageId) as
+      | MessageRow
+      | undefined
+    if (!row) return { ok: false, reason: 'missing' }
+    // You can only report what you were allowed to read in the first place.
+    if (!isParticipant(row.conversation_id, reporterId)) return { ok: false, reason: 'not-yours' }
+    if (row.created_at < joinedAt(row.conversation_id, reporterId)) {
+      return { ok: false, reason: 'not-yours' }
+    }
+    aboutId = row.sender_id
+    conversationId = row.conversation_id
+    said = row.body
+  } else if (aboutId) {
+    // Reporting a person requires sharing a conversation with them, so that a
+    // report cannot be used to probe whether an account exists.
+    const shared = db
+      .prepare(
+        `SELECT 1 FROM participants mine
+         JOIN participants theirs ON theirs.conversation_id = mine.conversation_id
+         WHERE mine.user_id = ? AND theirs.user_id = ? LIMIT 1`,
+      )
+      .get(reporterId, aboutId)
+    if (!shared) return { ok: false, reason: 'nobody' }
+  } else {
+    return { ok: false, reason: 'nobody' }
+  }
+
+  if (!aboutId) return { ok: false, reason: 'nobody' }
+  if (aboutId === reporterId) return { ok: false, reason: 'yourself' }
+
+  const id = randomUUID()
+  db.prepare(
+    `INSERT INTO reports
+       (id, reporter_id, about_id, conversation_id, message_id, said, reason, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    reporterId,
+    aboutId,
+    conversationId,
+    target.messageId ?? null,
+    said.slice(0, 4000),
+    reason.slice(0, 500),
+    Date.now(),
+  )
+  return { ok: true, id }
+}
+
+type ReportRow = {
+  id: string
+  reporter_id: string | null
+  about_id: string | null
+  conversation_id: string | null
+  message_id: string | null
+  said: string
+  reason: string
+  created_at: number
+}
+
+const faceOf = (id: string | null): Face | null => {
+  if (!id) return null
+  const user = findUser(id)
+  return user ? { id: user.id, name: user.name, hue: user.hue } : null
+}
+
+/** Newest first. Read by whoever holds the moderation token, and nobody else. */
+export function listReports(limit = 100): Report[] {
+  const rows = db
+    .prepare(`SELECT * FROM reports ORDER BY created_at DESC LIMIT ?`)
+    .all(limit) as ReportRow[]
+  return rows.map((row) => ({
+    id: row.id,
+    reporter: faceOf(row.reporter_id),
+    about: faceOf(row.about_id),
+    conversationId: row.conversation_id,
+    messageId: row.message_id,
+    said: row.said,
+    reason: row.reason,
+    createdAt: row.created_at,
+  }))
+}
+
+/** How many times this person has been flagged — shown next to a report. */
+export const timesReported = (aboutId: string): number =>
+  (db.prepare(`SELECT count(*) AS n FROM reports WHERE about_id = ?`).get(aboutId) as { n: number })
+    .n
+
 /* ------------------------------------------------------------ second factor */
 
 /**
@@ -530,6 +656,12 @@ export function removeMember(conversationId: string, memberId: string): boolean 
   return true
 }
 
+/** Who gathered the group. The one asymmetry in an application with no roles. */
+export const founderOf = (conversationId: string): string | null =>
+  (db.prepare(`SELECT created_by FROM conversations WHERE id = ?`).get(conversationId) as
+    | { created_by: string | null }
+    | undefined)?.created_by ?? null
+
 export function renameConversation(conversationId: string, title: string): string | null {
   if (conversationKind(conversationId) !== 'group') return null
   const name = title.trim().slice(0, 60)
@@ -687,6 +819,21 @@ export function addMessage(
     forwarded?.at ?? null,
   )
   return message
+}
+
+/**
+ * Whether this person was allowed to read this message. Participation is not
+ * enough on its own: a group withholds what was said before someone arrived,
+ * and anything guarding a message has to apply the same rule or become the
+ * way around it.
+ */
+export function canReadMessage(messageId: string, userId: string): boolean {
+  const row = db
+    .prepare(`SELECT conversation_id, created_at FROM messages WHERE id = ?`)
+    .get(messageId) as { conversation_id: string; created_at: number } | undefined
+  if (!row) return false
+  if (!isParticipant(row.conversation_id, userId)) return false
+  return row.created_at >= joinedAt(row.conversation_id, userId)
 }
 
 /** Just the conversation a message belongs to — used to guard its file. */

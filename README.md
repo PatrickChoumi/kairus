@@ -102,6 +102,16 @@ eux**, à la même teinte, de sorte qu'on reconnaît le même produit.
   nom d'usage exact hors de votre cercle, librement à l'intérieur
 - Blocage réciproque : plus de messages, plus de présence, plus de visibilité
   dans la recherche, dans les deux sens
+- **Signalement** : un message ou une personne, avec un motif. Le signalement
+  **copie les mots** au moment où il est fait — l'auteur peut retirer son
+  message, et un signalement qui pointe vers un trou n'est actionnable par
+  personne. Il est transmis à qui administre le serveur et **rien ne se
+  produit automatiquement** : aucun compte ne disparaît sur un nombre de
+  signalements, parce qu'un système qui punit au compteur est un système que
+  n'importe qui peut braquer sur n'importe qui. L'écran le dit
+- **Retirer quelqu'un d'un groupe** : la seule asymétrie d'une application sans
+  rôles — la personne qui a réuni le groupe peut en retirer un membre. Sans
+  ça, un groupe avec un gêneur ne se dissout qu'en le quittant tous
 - Historique paginé au défilement vers le haut
 - Reconnexion automatique avec repli exponentiel, et file d'attente des envois
   pendant une coupure
@@ -268,7 +278,7 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 267 tests : 153 côté serveur, 114 côté client
+npm test                   # 280 tests : 165 côté serveur, 115 côté client
 npm run typecheck          # serveur et client
 ```
 
@@ -283,7 +293,10 @@ jointes — qui peut les lire, ce qui n'est jamais affiché en place, ce qui est
 balayé —, restauration de sauvegarde — un vrai serveur démarré sur un
 instantané remis en place, qui doit encore accepter les sessions d'avant —,
 groupes — l'historique qui ne s'hérite pas, la marque de lecture qui
-attend le dernier, ce qu'un tiers ne peut pas faire —, messages vocaux — la
+attend le dernier, ce qu'un tiers ne peut pas faire, qui peut retirer qui —,
+signalement — les mots conservés malgré un retrait, l'impossibilité de
+signaler ce qu'on n'avait pas le droit de lire, la liste illisible sans le
+jeton —, messages vocaux — la
 durée et la forme conservées, une forme d'onde forgée refusée, le son servi en
 place —, appels — la négociation relayée sans être lue, un inconnu qui ne peut
 pas faire sonner le téléphone d'autrui, le blocage qui tient dans les deux sens,
@@ -369,9 +382,10 @@ server/
   test/            node:test, base en mémoire, serveur réel sur port éphémère
 ```
 
-Le client pèse **78 ko compressés** — 71,5 ko de JavaScript et 6,6 ko de CSS,
+Le client pèse **80,6 ko compressés** — 73,8 ko de JavaScript et 6,8 ko de CSS,
 dépendances comprises. Le chiffre sort de `npm run build --prefix client`, qui
-l'imprime : il se regénère à chaque changement plutôt que de se recopier. Pas
+l'imprime ; la CI l'imprime aussi à chaque exécution, pour qu'un écart se voie
+sans qu'on ait à y penser. Pas
 de bibliothèque d'animation, pas de framework CSS, pas de routeur : il n'y a
 qu'une seule surface, donc il n'y a rien à router.
 
@@ -419,8 +433,10 @@ dessus :
 - **Chiffrement de bout en bout.** Les messages sont en clair dans SQLite.
   Kairus protège l'accès, pas le contenu. Les appels sont chiffrés en
   transport (DTLS-SRTP), ce qui protège du réseau, pas du serveur.
-- **Modération.** Le blocage existe, mais il n'y a ni signalement, ni
-  administration, ni recours.
+- **Suite donnée aux signalements.** Ils sont enregistrés et lisibles derrière
+  `MODERATION_TOKEN`, mais il n'existe aucun outil pour agir : pas de
+  suspension, pas de recours, pas d'historique de décision. Quelqu'un doit
+  lire la liste et faire quelque chose à la main.
 - **Mise à l'échelle horizontale.** Le hub temps réel et les compteurs de
   limitation vivent dans le processus, la base est un fichier local : deux
   instances cesseraient de se voir. C'est un plafond d'architecture, pas un
@@ -436,6 +452,11 @@ dessus :
   dans Chromium à chaque changement, ce qui dépend de quelqu'un qui y pense.
 - **Test de charge.** L'affirmation « une instance tient quelques milliers
   d'utilisateurs » est une estimation, pas une mesure.
+- **Les sauvegardes ne couvrent pas les fichiers.** `BACKUP_DIR` prend un
+  instantané de la base, et rien d'autre : restaurer après la perte du volume
+  rendrait toutes les conversations avec des pièces jointes et des vocaux
+  morts. `DEPLOY.md` le disait déjà ; ce document donnait l'impression du
+  contraire. À sauvegarder à part en attendant.
 - **Internationalisation.** L'interface est en français, en dur.
 
 ---

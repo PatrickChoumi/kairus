@@ -1932,6 +1932,80 @@ kbd {
   color: var(--ink-faint);
 }
 
+/* ------------------------------------------------------------------- flag */
+
+.relay__quest--grave {
+  color: var(--grave);
+}
+
+.line__acts .line__grave:hover {
+  color: var(--grave);
+}
+
+.flag__form {
+  display: flex;
+  flex-direction: column;
+}
+
+.flag__reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 14px 18px 0;
+}
+
+.flag__reasons button {
+  padding: 5px 11px;
+  border: 1px solid var(--hair-strong);
+  border-radius: 99px;
+  font-size: var(--text-meta);
+  color: var(--ink-soft);
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.flag__reasons button:hover {
+  color: var(--ink);
+}
+
+.flag__reasons button[data-picked] {
+  border-color: transparent;
+  background: var(--grave);
+  color: var(--bg);
+}
+
+.flag__go {
+  margin: 14px 18px 0;
+  padding-block: 10px;
+  border-radius: var(--radius);
+  background: var(--grave);
+  color: var(--bg);
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: filter 0.18s ease;
+}
+
+.flag__go:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.flag__go:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* What this does, and what it does not. */
+.flag__truth {
+  margin: 18px;
+  padding-block-start: 14px;
+  border-block-start: 1px solid var(--hair);
+  font-size: var(--text-label);
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
 /* ----------------------------------------------------------------- notice */
 
 .notice {

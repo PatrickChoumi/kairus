@@ -35,10 +35,11 @@ const show = (over: Partial<Message> = {}, props: Partial<Parameters<typeof Bubb
     onRetract: vi.fn(),
     onRelay: vi.fn(),
     onPin: vi.fn(),
+    onFlag: vi.fn(),
     onOpenImage: vi.fn(),
   }
   const msg = message(over)
-  render(
+  const view = render(
     <Bubble
       message={msg}
       mine={msg.senderId === ME}
@@ -54,7 +55,7 @@ const show = (over: Partial<Message> = {}, props: Partial<Parameters<typeof Bubb
       {...props}
     />,
   )
-  return { message: msg, ...handlers }
+  return { message: msg, ...handlers, unmount: view.unmount }
 }
 
 const actions = () =>
@@ -64,6 +65,16 @@ describe('what can be done to a message', () => {
   it('offers reply, forward and pin on anyone’s message', () => {
     show({ senderId: OTHER })
     expect(actions()).toEqual(expect.arrayContaining(['répondre', 'transférer', 'épingler']))
+  })
+
+  it('offers to report someone else’s message, and never your own', () => {
+    const theirs = show({ senderId: OTHER })
+    expect(actions()).toContain('signaler')
+    theirs.unmount()
+
+    // `onFlag` is null on your own words: there is nobody to report but you.
+    show({ senderId: ME }, { onFlag: null })
+    expect(actions()).not.toContain('signaler')
   })
 
   it('never offers to edit or retract someone else’s', () => {
@@ -174,6 +185,7 @@ describe('the state a bubble shows', () => {
         onRetract={vi.fn()}
         onRelay={vi.fn()}
         onPin={vi.fn()}
+        onFlag={vi.fn()}
         onOpenImage={vi.fn()}
       />,
     )
@@ -198,6 +210,7 @@ describe('the state a bubble shows', () => {
         onRetract={vi.fn()}
         onRelay={vi.fn()}
         onPin={vi.fn()}
+        onFlag={vi.fn()}
         onOpenImage={vi.fn()}
       />,
     )
@@ -222,6 +235,7 @@ describe('the state a bubble shows', () => {
         onRetract={vi.fn()}
         onRelay={vi.fn()}
         onPin={vi.fn()}
+        onFlag={vi.fn()}
         onOpenImage={vi.fn()}
       />,
     )

@@ -13,8 +13,13 @@ import {
   describeConversation,
   findLiveIdentity,
   findUserByHandle,
+  canReadMessage,
+  fileReport,
   findMessageConversation,
   findUserRow,
+  founderOf,
+  listReports,
+  timesReported,
   forwardMessage,
   beginTotp,
   clearTotp,
@@ -468,6 +473,71 @@ const authed: Record<string, Handler> = {
     return { left: true }
   },
 
+  /**
+   * Taking someone out. The single asymmetry in an application with no roles:
+   * whoever gathered the group can remove a member. Without it, a group with
+   * one person nobody wants can only be dissolved by everybody leaving.
+   */
+  'POST /api/groups/remove': ({ userId, body }) => {
+    const conversationId = field(body, 'conversation')
+    const handle = field(body, 'handle').toLowerCase()
+    if (conversationKind(conversationId) !== 'group' || !isParticipant(conversationId, userId)) {
+      throw new HttpError(404, 'cette conversation n’existe pas')
+    }
+    if (founderOf(conversationId) !== userId) {
+      throw new HttpError(403, 'seule la personne qui a réuni le groupe peut en retirer quelqu’un')
+    }
+    const person = isHandle(handle) ? findUserByHandle(handle) : undefined
+    if (!person || !isParticipant(conversationId, person.id)) {
+      throw new HttpError(404, 'cette personne n’est pas dans ce groupe')
+    }
+    if (person.id === userId) {
+      throw new HttpError(400, 'pour partir soi-même, on quitte le groupe')
+    }
+
+    const remaining = participantIds(conversationId).filter((id) => id !== person.id)
+    removeMember(conversationId, person.id)
+    hub.toUser(person.id, { t: 'gone', conversation: conversationId })
+    for (const id of remaining) {
+      const theirs = describeConversation(conversationId, id)
+      if (theirs) hub.toUser(id, { t: 'conversation', conversation: theirs })
+    }
+    return { removed: publicUser(person) }
+  },
+
+  /* -- reporting ---------------------------------------------------------- */
+
+  /**
+   * Reporting records and nothing else — no threshold at which an account
+   * disappears, because a system that punishes on a count is a system anyone
+   * can aim at anyone.
+   */
+  'POST /api/reports': ({ userId, body }) => {
+    spend(limits.report, userId, 'trop de signalements d’un coup')
+    const messageId = field(body, 'message')
+    const handle = field(body, 'handle').toLowerCase()
+    const about = handle && isHandle(handle) ? findUserByHandle(handle) : undefined
+
+    const filed = fileReport(
+      userId,
+      { messageId: messageId || undefined, aboutId: about?.id },
+      field(body, 'reason'),
+    )
+    if (!filed.ok) {
+      const said: Record<string, [number, string]> = {
+        missing: [404, 'ce message n’existe plus'],
+        'not-yours': [404, 'ce message n’existe plus'],
+        nobody: [404, 'personne ne porte ce nom'],
+        yourself: [400, 'on ne se signale pas soi-même'],
+      }
+      const [status, message] = said[filed.reason] ?? [400, 'impossible']
+      throw new HttpError(status, message)
+    }
+    count('reports.filed')
+    log.warn('report.filed', { id: filed.id, by: userId })
+    return { filed: true }
+  },
+
   'POST /api/groups/rename': ({ userId, body }) => {
     const conversationId = field(body, 'conversation')
     if (!isParticipant(conversationId, userId)) {
@@ -687,6 +757,27 @@ const anonymous: Record<string, Handler> = {
   'GET /api/health': () => ({ ok: true }),
 
   /**
+   * The reports, for whoever runs the server. Guarded by MODERATION_TOKEN and
+   * nothing else: Kairus has no administrator account, and inventing one just
+   * to read a list would be a far larger surface than a shared secret.
+   */
+  'GET /api/reports': ({ url }) => {
+    const secret = process.env.MODERATION_TOKEN?.trim()
+    if (!secret || url.searchParams.get('token') !== secret) {
+      throw new HttpError(404, 'route inconnue')
+    }
+    const reports = listReports()
+    return {
+      reports: reports.map((report) => ({
+        ...report,
+        // How often this person has been flagged, so a pattern is visible
+        // without having to count by hand.
+        timesReported: report.about ? timesReported(report.about.id) : 0,
+      })),
+    }
+  },
+
+  /**
    * Counters, for whoever is watching. Guarded by METRICS_TOKEN: connection
    * counts and refusal rates are not something to publish.
    */
@@ -861,8 +952,11 @@ async function carryFile(
 
   // Before it is attached only its uploader may see it; afterwards, whoever
   // can read the conversation it belongs to.
+  // Participation alone was not enough: a group withholds what was said
+  // before someone arrived, and a direct link to a file must not be the way
+  // around that. It now asks the same question the thread asks.
   const allowed = row.message_id
-    ? isParticipant(findMessageConversation(row.message_id) ?? '', user.id)
+    ? canReadMessage(row.message_id, user.id)
     : row.uploader_id === user.id
   if (!allowed) throw new HttpError(404, 'ce fichier n’existe plus')
 

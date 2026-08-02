@@ -101,6 +101,11 @@ export const limits = {
   open: new Limiter(30, 30 / 60),
   /** Searching — every keystroke in the Cursor reaches here. */
   look: new Limiter(30, 120),
+  /**
+   * Reporting. Generous enough for someone dealing with a real flood of
+   * abuse, tight enough that reports cannot themselves become the abuse.
+   */
+  report: new Limiter(20, 20 / 10),
   /** Sending files: a handful at once, then a steady trickle. */
   upload: new Limiter(10, 20),
   /**

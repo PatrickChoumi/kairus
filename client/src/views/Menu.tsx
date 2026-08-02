@@ -18,6 +18,7 @@ export function Menu({ conversation, onClose }: Props) {
   const toggleReading = useStore((s) => s.toggleReading)
   const setCursor = useStore((s) => s.setCursor)
   const block = useStore((s) => s.block)
+  const flag = useStore((s) => s.flag)
   const leaveGroup = useStore((s) => s.leaveGroup)
 
   useEffect(() => {
@@ -78,13 +79,23 @@ export function Menu({ conversation, onClose }: Props) {
         </>
       ) : (
         peer && (
-          <button
-            role="menuitem"
-            className="menu__grave"
-            onClick={act(() => void block(peer.handle))}
-          >
-            bloquer {peer.name}
-          </button>
+          <>
+            <button
+              role="menuitem"
+              onClick={act(() =>
+                flag({ message: null, handle: peer.handle, name: peer.name }),
+              )}
+            >
+              signaler {peer.name}
+            </button>
+            <button
+              role="menuitem"
+              className="menu__grave"
+              onClick={act(() => void block(peer.handle))}
+            >
+              bloquer {peer.name}
+            </button>
+          </>
         )
       )}
 

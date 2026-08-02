@@ -25,6 +25,8 @@ type State = {
   editing: Message | null
   /** The message waiting for somewhere to be sent on to. */
   relaying: Message | null
+  /** What is about to be reported: a message, or a person by name. */
+  flagging: { message: Message | null; handle: string; name: string } | null
   typing: Record<string, number>
   online: Record<string, boolean>
 
@@ -79,6 +81,10 @@ type Actions = {
   relay: (message: Message | null) => void
   relayTo: (conversationId: string) => void
   pin: (message: Message, pinned: boolean) => void
+  /** Picks something up to report; `flagWith` files it with a reason. */
+  flag: (target: { message: Message | null; handle: string; name: string } | null) => void
+  flagWith: (reason: string) => Promise<void>
+  expel: (conversationId: string, handle: string) => Promise<void>
   /** Saves what is being written so another device finds it. */
   sketch: (conversationId: string, body: string) => void
 
@@ -391,6 +397,7 @@ export const useStore = create<State & Actions>((set, get) => {
     replyTo: null,
     editing: null,
     relaying: null,
+    flagging: null,
     typing: {},
     online: {},
     blocked: [],
@@ -601,6 +608,7 @@ export const useStore = create<State & Actions>((set, get) => {
         replyTo: null,
         editing: null,
         relaying: null,
+        flagging: null,
         typing: {},
         online: {},
         cursor: false,
@@ -613,7 +621,14 @@ export const useStore = create<State & Actions>((set, get) => {
     },
 
     enter(conversationId) {
-      set({ open: conversationId, replyTo: null, editing: null, relaying: null, cursor: false })
+      set({
+        open: conversationId,
+        replyTo: null,
+        editing: null,
+        relaying: null,
+        flagging: null,
+        cursor: false,
+      })
       void hydrate(conversationId)
       markRead(conversationId)
     },
@@ -836,6 +851,38 @@ export const useStore = create<State & Actions>((set, get) => {
         conversation: conversationId,
         message: message.id,
       })
+    },
+
+    flag(target) {
+      set({ flagging: target })
+    },
+
+    /**
+     * Files it. There is no optimistic anything: a report either reached the
+     * server or it did not, and saying "signalé" for one that never arrived
+     * would be the worst possible lie to tell someone being harassed.
+     */
+    async flagWith(reason) {
+      const target = get().flagging
+      if (!target) return
+      try {
+        await api.report(
+          target.message ? { message: target.message.id } : { handle: target.handle },
+          reason,
+        )
+        set({ flagging: null, notice: 'signalé — c’est enregistré' })
+      } catch (error) {
+        set({ notice: error instanceof ApiError ? error.message : 'le signalement n’est pas parti' })
+      }
+    },
+
+    async expel(conversationId, handle) {
+      try {
+        const { removed } = await api.removeFromGroup(conversationId, handle.replace(/^@/, ''))
+        set({ notice: `${removed.name} ne fait plus partie du groupe` })
+      } catch (error) {
+        set({ notice: error instanceof ApiError ? error.message : 'impossible de retirer' })
+      }
     },
 
     sketch(conversationId, body) {

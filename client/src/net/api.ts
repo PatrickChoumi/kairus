@@ -98,6 +98,19 @@ export const api = {
   newRecoveryPhrase: () =>
     request<{ recoveryPhrase: string }>('/api/account/recovery', { method: 'POST' }),
 
+  /** Records something. Nothing happens automatically — that is the point. */
+  report: (target: { message?: string; handle?: string }, reason: string) =>
+    request<{ filed: true }>('/api/reports', {
+      method: 'POST',
+      body: JSON.stringify({ ...target, reason }),
+    }),
+
+  removeFromGroup: (conversation: string, handle: string) =>
+    request<{ removed: User }>('/api/groups/remove', {
+      method: 'POST',
+      body: JSON.stringify({ conversation, handle }),
+    }),
+
   /* -- the second factor -------------------------------------------------- */
 
   totpState: () => request<{ on: boolean; started: boolean }>('/api/account/totp'),

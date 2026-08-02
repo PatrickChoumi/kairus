@@ -27,6 +27,8 @@ type Props = {
   onRetract: (message: Message) => void
   onRelay: (message: Message) => void
   onPin: (message: Message, pinned: boolean) => void
+  /** Absent on your own words: there is nobody to report but yourself. */
+  onFlag: ((message: Message) => void) | null
   onOpenImage: (attachment: Attachment, url: string) => void
 }
 
@@ -54,6 +56,7 @@ export function Bubble({
   onRetract,
   onRelay,
   onPin,
+  onFlag,
   onOpenImage,
 }: Props) {
   const row = useRef<HTMLDivElement>(null)
@@ -191,6 +194,16 @@ export function Bubble({
               >
                 <Icon name="forward" size={17} />
               </button>
+              {onFlag && (
+                <button
+                  className="line__grave"
+                  onClick={() => onFlag(message)}
+                  aria-label="signaler"
+                  title="signaler"
+                >
+                  <Icon name="flag" size={17} />
+                </button>
+              )}
               <button
                 onClick={() => onPin(message, !pinned)}
                 aria-label={pinned ? 'détacher' : 'épingler'}

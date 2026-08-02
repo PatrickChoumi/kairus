@@ -58,6 +58,7 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   const ringUp = useStore((s) => s.ringUp)
   const relay = useStore((s) => s.relay)
   const pin = useStore((s) => s.pin)
+  const flag = useStore((s) => s.flag)
 
   const stream = useRef<HTMLDivElement>(null)
   const wasNearBottom = useRef(true)
@@ -121,6 +122,8 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
 
   const nameOf = (id: string): string =>
     id === me.id ? 'vous' : (conversation.members.find((m) => m.id === id)?.name ?? 'quelqu’un')
+  const handleOf = (id: string): string =>
+    conversation.members.find((m) => m.id === id)?.handle ?? ''
   const hueOf = (id: string): number | null =>
     id === me.id ? null : (conversation.members.find((m) => m.id === id)?.hue ?? null)
 
@@ -271,6 +274,16 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
                   onRetract={retract}
                   onRelay={relay}
                   onPin={pin}
+                  onFlag={
+                    mine
+                      ? null
+                      : (m) =>
+                          flag({
+                            message: m,
+                            handle: handleOf(m.senderId),
+                            name: nameOf(m.senderId),
+                          })
+                  }
                   onOpenImage={openImage}
                 />
               </div>

@@ -62,6 +62,7 @@ export function Cursor() {
   const gather = useStore((s) => s.gather)
   const invite = useStore((s) => s.invite)
   const leaveGroup = useStore((s) => s.leaveGroup)
+  const expel = useStore((s) => s.expel)
   const renameGroup = useStore((s) => s.renameGroup)
   const signOut = useStore((s) => s.signOut)
   const notify = useStore((s) => s.notify)
@@ -293,6 +294,19 @@ export function Cursor() {
                 }),
             },
             {
+              key: 'x:expel',
+              group: 'réglages' as const,
+              label: 'retirer quelqu’un du groupe',
+              hint: 'seule la personne qui l’a réuni le peut',
+              keeps: true,
+              run: () =>
+                setQuest({
+                  title: 'retirer du groupe',
+                  steps: [{ label: 'son nom d’usage' }],
+                  run: ([handle]) => expel(openOne.id, handle ?? ''),
+                }),
+            },
+            {
               key: 'x:quit',
               group: 'réglages' as const,
               label: 'quitter le groupe',
@@ -480,7 +494,15 @@ export function Cursor() {
     void guard(quest.run(collected))
   }
 
-  const onKeyDown = (event: KeyboardEvent) => {
+  /**
+   * The keys, wherever they are pressed.
+   *
+   * Hanging these off the field alone made the whole command surface depend
+   * on a focus race: anything that took focus — a click on the button that
+   * opened it, a browser that had not run the focus frame yet — left the
+   * Cursor open and deaf, with the mouse as the only way out.
+   */
+  const react = (event: { key: string; preventDefault: () => void }) => {
     if (quest) {
       if (event.key === 'Enter') {
         event.preventDefault()
@@ -505,6 +527,21 @@ export function Cursor() {
       setCursor(false)
     }
   }
+
+  const onKeyDown = (event: KeyboardEvent) => react(event)
+
+  useEffect(() => {
+    if (!shown) return
+    const away = (event: globalThis.KeyboardEvent) => {
+      // The field handles its own; this is for everywhere else.
+      if (event.target === field.current) return
+      if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(event.key)) return
+      event.stopPropagation()
+      react(event)
+    }
+    window.addEventListener('keydown', away, true)
+    return () => window.removeEventListener('keydown', away, true)
+  })
 
   const step = quest?.steps[answers.length]
   let group = ''

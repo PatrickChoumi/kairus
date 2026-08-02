@@ -79,6 +79,24 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_pins_conversation ON pins (conversation_id, pinned_at DESC);
 
+  -- What someone flagged, and why. The words are copied rather than joined:
+  -- an author can retract a message, and a report pointing at a hole is a
+  -- report nobody can act on.
+  CREATE TABLE IF NOT EXISTS reports (
+    id              TEXT PRIMARY KEY,
+    reporter_id     TEXT REFERENCES users(id) ON DELETE SET NULL,
+    about_id        TEXT REFERENCES users(id) ON DELETE SET NULL,
+    conversation_id TEXT,
+    message_id      TEXT,
+    -- The message as it read when it was flagged.
+    said            TEXT NOT NULL DEFAULT '',
+    reason          TEXT NOT NULL DEFAULT '',
+    created_at      INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_reports_at ON reports (created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_reports_about ON reports (about_id);
+
   CREATE TABLE IF NOT EXISTS blocks (
     blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
