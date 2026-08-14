@@ -219,5 +219,7 @@ export const api = {
 
   people: (q: string) => request<{ people: User[] }>(`/api/people${query({ q })}`),
 
-  search: (q: string) => request<{ hits: SearchHit[] }>(`/api/search${query({ q })}`),
+  /** Everywhere, or inside one conversation when `conversation` is given. */
+  search: (q: string, conversation?: string) =>
+    request<{ hits: SearchHit[] }>(`/api/search${query({ q, conversation })}`),
 }

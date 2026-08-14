@@ -166,6 +166,39 @@ describe('where the words came from', () => {
   })
 })
 
+describe('links in what someone wrote', () => {
+  it('makes a real address clickable, and opens it away from the app', () => {
+    show(message({ body: 'regarde https://exemple.fr/page' }))
+    const link = screen.getByRole('link')
+    expect(link).toHaveAttribute('href', 'https://exemple.fr/page')
+    expect(link).toHaveAttribute('target', '_blank')
+    // Without noopener the page we open can reach back into this one.
+    expect(link.getAttribute('rel')).toContain('noopener')
+  })
+
+  it('leaves a scheme nobody should follow as plain text', () => {
+    show(message({ body: 'clique sur javascript:alert(1) pour voir' }))
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getByText(/javascript:alert\(1\)/)).toBeInTheDocument()
+  })
+
+  it('shortens a long address without losing where it goes', () => {
+    const long = `https://exemple.fr/${'a'.repeat(120)}`
+    show(message({ body: long }))
+    const link = screen.getByRole('link')
+    expect(link).toHaveAttribute('href', long)
+    expect(link.textContent?.length).toBeLessThan(60)
+    // The whole thing is still readable on hover.
+    expect(link).toHaveAttribute('title', long)
+  })
+
+  it('keeps the sentence around the link intact', () => {
+    show(message({ body: 'voir https://exemple.fr/a, puis rentrer' }))
+    expect(screen.getByRole('link')).toHaveTextContent('exemple.fr/a')
+    expect(screen.getByText(/, puis rentrer/)).toBeInTheDocument()
+  })
+})
+
 describe('the state a bubble shows', () => {
   it('marks a message as read only once it has been', () => {
     const { container } = render(

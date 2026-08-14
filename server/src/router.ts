@@ -439,7 +439,11 @@ const authed: Record<string, Handler> = {
   'GET /api/search': ({ userId, url }) => {
     spend(limits.look, userId, 'trop de recherches d’un coup')
     const q = (url.searchParams.get('q') ?? '').trim()
-    return { hits: q.length >= 2 ? searchMessages(userId, q) : [] }
+    // Narrowed to one conversation, more results are wanted: the whole point
+    // is to walk them, and a dozen is not enough to find the one from March.
+    const within = url.searchParams.get('conversation')?.trim() || undefined
+    if (q.length < 2) return { hits: [] }
+    return { hits: searchMessages(userId, q, within ? 60 : 12, within) }
   },
 
   /* -- groups ------------------------------------------------------------- */

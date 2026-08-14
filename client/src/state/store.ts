@@ -49,6 +49,15 @@ type State = {
   /** The secret being set up, while it is being set up. */
   arming: { secret: string; readable: string; uri: string } | null
 
+  /**
+   * How many messages were waiting when each conversation was last opened.
+   *
+   * Entering marks it read, so the live count collapses to zero within the
+   * second — the line saying "you stopped here" would vanish while being
+   * looked at. Captured before that happens, and only then.
+   */
+  fresh: Record<string, number>
+
   /** Which conversation's files are being looked at, and which sort. */
   gallery: { conversationId: string; kind: SharedKind } | null
   /** What came back, newest first. */
@@ -103,6 +112,13 @@ type Actions = {
 
   /** Opens the gallery on a conversation, or closes it. */
   browse: (conversationId: string | null, kind?: SharedKind) => void
+
+  /**
+   * Pulls older pages until `messageId` is loaded. Answers whether it got
+   * there — a search result from last March is no use if tapping it does
+   * nothing.
+   */
+  reach: (messageId: string) => Promise<boolean>
 
   refreshPush: () => Promise<void>
   togglePush: () => Promise<void>
@@ -637,6 +653,11 @@ export const useStore = create<State & Actions>((set, get) => {
     },
 
     enter(conversationId) {
+      // Before markRead, which is about to zero it.
+      const waiting = get().conversations.find((c) => c.id === conversationId)?.unread ?? 0
+      set((s) => ({
+        fresh: { ...s.fresh, [conversationId]: waiting },
+      }))
       set({
         open: conversationId,
         replyTo: null,
@@ -927,6 +948,7 @@ export const useStore = create<State & Actions>((set, get) => {
       }
     },
 
+    fresh: {},
     gallery: null,
     shared: [],
     browsing: false,
@@ -987,6 +1009,43 @@ export const useStore = create<State & Actions>((set, get) => {
       } catch {
         set({ notice: 'impossible de remonter plus loin' })
       }
+    },
+
+    /**
+     * Walks back through the history until a message is in hand.
+     *
+     * A search result names a message that is very often not loaded — the
+     * thread holds the last page, the result is from March. Rather than a
+     * separate "messages around this one" endpoint, this reuses the paging
+     * that already exists: ask for the previous page, repeat. Bounded, because
+     * a year of conversation should not become forty silent round trips; past
+     * that the honest answer is that it is too far.
+     */
+    async reach(messageId) {
+      const conversationId = get().open
+      if (!conversationId) return false
+      const has = () => (get().messages[conversationId] ?? []).some((m) => m.id === messageId)
+      if (has()) return true
+
+      for (let page = 0; page < 12; page += 1) {
+        if (get().exhausted[conversationId]) break
+        const before = get().messages[conversationId]?.[0]?.createdAt
+        if (before === undefined) break
+        try {
+          const { messages: batch } = await api.messages(conversationId, before)
+          set((s) => ({
+            messages: {
+              ...s.messages,
+              [conversationId]: [...batch, ...(s.messages[conversationId] ?? [])],
+            },
+            exhausted: { ...s.exhausted, [conversationId]: batch.length === 0 },
+          }))
+        } catch {
+          return false
+        }
+        if (has()) return true
+      }
+      return has()
     },
 
     setTheme(theme) {

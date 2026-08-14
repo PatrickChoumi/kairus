@@ -106,6 +106,19 @@ eux**, à la même teinte, de sorte qu'on reconnaît le même produit.
   grille, séparé en images, audio et documents. Les règles sont exactement
   celles du fil, `joined_at` compris — une seconde façon de regarder la même
   conversation, pas une seconde porte plus laxiste
+- **Liens cliquables** : ce qui ressemble à une adresse en devient une. Seuls
+  `http` et `https` — `javascript:`, `data:` et les autres restent du texte
+  inerte, visibles tels quels. Rien n'est jamais transformé en balisage : le
+  corps est découpé en morceaux, et React échappe le reste
+- **Ligne « nouveaux messages »** : là où vous vous étiez arrêté. Le compte est
+  figé à l'ouverture — entrer marque comme lu, donc le compteur retombe à zéro
+  dans la seconde et la ligne disparaîtrait sous les yeux
+- **Retour au présent** : un bouton quand le dernier message est loin en
+  dessous, avec le nombre de messages en attente
+- **Chercher dans une conversation** : la loupe de l'en-tête cherche ici plutôt
+  que partout. Plus de résultats, en ordre de date, et cliquer sur l'un d'eux
+  **y emmène** — l'historique est remonté page par page jusqu'à l'avoir sous la
+  main, puis le message clignote une fois
 - Indicateur de frappe, présence, accusés de lecture, compteurs de non-lus
 - Recherche dans l'historique sur un index FTS5 ; les personnes se trouvent par
   nom d'usage exact hors de votre cercle, librement à l'intérieur
@@ -287,7 +300,7 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 312 tests : 182 côté serveur, 130 côté client
+npm test                   # 348 tests : 187 côté serveur, 161 côté client
 npm run typecheck          # serveur et client
 ```
 

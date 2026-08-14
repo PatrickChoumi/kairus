@@ -178,6 +178,65 @@ describe('the pinned bar', () => {
   })
 })
 
+describe('where you had stopped reading', () => {
+  const three = [
+    message({ id: 'a', senderId: PEER.id, body: 'avant', createdAt: 1000 }),
+    message({ id: 'b', senderId: PEER.id, body: 'premier non lu', createdAt: 2000 }),
+    message({ id: 'c', senderId: PEER.id, body: 'second non lu', createdAt: 3000 }),
+  ]
+
+  it('draws a line at the first message you had not seen', () => {
+    // What was waiting when the conversation was opened — the live count is
+    // already zero by now, which is exactly why the store keeps this.
+    show({ unread: 0 }, { messages: { c1: three }, fresh: { c1: 2 } })
+    const line = screen.getByText('nouveaux messages')
+    expect(line).toBeInTheDocument()
+
+    // Above the first unread, below the one before it.
+    const marker = line.closest('.daymark')
+    const first = document.getElementById('m-b')
+    expect(marker && first && marker.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('draws nothing when everything had been read', () => {
+    show({ unread: 0 }, { messages: { c1: three }, fresh: { c1: 0 } })
+    expect(screen.queryByText('nouveaux messages')).not.toBeInTheDocument()
+  })
+
+  it('does not count your own messages as unread', () => {
+    show(
+      { unread: 0 },
+      {
+        fresh: { c1: 1 },
+        messages: {
+          c1: [
+            message({ id: 'a', senderId: PEER.id, body: 'le sien', createdAt: 1000 }),
+            message({ id: 'b', senderId: ME.id, body: 'le mien', createdAt: 2000 }),
+          ],
+        },
+      },
+    )
+    // The one unread message is theirs, not the one you wrote last.
+    const marker = screen.getByText('nouveaux messages').closest('.daymark')
+    const theirs = document.getElementById('m-a')
+    expect(marker && theirs && marker.compareDocumentPosition(theirs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('stays put when the conversation is marked read under it', () => {
+    const { rerender } = show({ unread: 2 }, { messages: { c1: three }, fresh: { c1: 2 } })
+    expect(screen.getByText('nouveaux messages')).toBeInTheDocument()
+
+    // Arriving marks it read within the second; the line must not vanish
+    // while it is being looked at. This is the whole reason the count is
+    // snapshotted rather than read live.
+    const read = conversation({ unread: 0 })
+    rerender(
+      <Thread conversation={read} onLeave={vi.fn()} headSigil={createRef()} sigilHidden={false} />,
+    )
+    expect(screen.getByText('nouveaux messages')).toBeInTheDocument()
+  })
+})
+
 describe('an empty thread', () => {
   it('invites the first word rather than showing a blank', () => {
     show({}, { messages: { c1: [] } })

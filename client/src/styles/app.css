@@ -53,12 +53,23 @@
   .stage {
     display: grid;
     grid-template-columns: minmax(17rem, 21rem) 1fr;
+    /*
+     * The row is the viewport, not the content. Left implicit it is `auto`,
+     * which sizes to the tallest child — so a long conversation grew the
+     * column past the screen, `overflow: hidden` clipped it, and the result
+     * was a thread that could not be scrolled and a composer nobody could
+     * reach. It only showed up once a conversation was longer than a screen.
+     */
+    grid-template-rows: 100%;
   }
 
   .layer {
     position: relative;
     inset: auto;
     min-inline-size: 0;
+    /* Same reason in the other axis: without it a grid item refuses to
+       shrink below its content, and the inner scroller never scrolls. */
+    min-block-size: 0;
     will-change: auto;
   }
 
@@ -640,6 +651,7 @@ kbd {
 /* -------------------------------------------------------------------- bar */
 
 .thread {
+  position: relative;
   display: flex;
   flex-direction: column;
   block-size: 100%;
@@ -840,6 +852,9 @@ kbd {
 
 .stream {
   flex: 1;
+  /* A flex item's default minimum is its content, which would make `flex: 1`
+     grow rather than scroll. This is what makes the overflow real. */
+  min-block-size: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -880,6 +895,32 @@ kbd {
   font-size: var(--text-label);
   letter-spacing: 0.04em;
   color: var(--ink-faint);
+}
+
+/*
+ * Where you had stopped reading. A rule across the whole width rather than
+ * another pill: the day marks are pills, and this has to read as a different
+ * kind of thing at a glance, not as another date.
+ */
+.daymark--fresh {
+  align-items: center;
+  gap: 10px;
+  margin-block: 22px 14px;
+}
+
+.daymark--fresh::before,
+.daymark--fresh::after {
+  content: '';
+  flex: 1;
+  block-size: 1px;
+  background: var(--accent-soft);
+}
+
+.daymark--fresh span {
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* ---------------------------------------------------------------- bubbles */
@@ -2183,4 +2224,188 @@ kbd {
   font-size: var(--text-label);
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ links */
+
+/*
+ * A link inside a bubble. Underlined rather than coloured: on one's own
+ * message the accent is already the background, and a link that changes hue
+ * with the side it sits on reads as two different things.
+ */
+.bubble__link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  overflow-wrap: anywhere;
+  transition: text-decoration-color 0.16s ease;
+}
+
+.bubble__link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* ---------------------------------------------------------- back to now */
+
+.thread__present {
+  position: absolute;
+  inset-inline-end: 18px;
+  inset-block-end: 86px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  border-radius: 50%;
+  background: var(--veil);
+  color: var(--ink-soft);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 14%);
+  transition:
+    color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.thread__present:hover {
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+/* The count rides the button rather than sitting beside it: one object. */
+.thread__present-count {
+  position: absolute;
+  inset-block-start: -5px;
+  inset-inline-end: -4px;
+  min-inline-size: 18px;
+  padding: 1px 5px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------- searching in one thread */
+
+/*
+ * A strip under the header rather than a panel over the conversation: what
+ * one is searching is right there behind it, and covering it would be the
+ * wrong shape for the question being asked.
+ */
+.sift {
+  position: relative;
+  z-index: 2;
+  border-block-end: 1px solid var(--hair);
+  background: var(--bg);
+}
+
+.sift__field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  color: var(--ink-faint);
+}
+
+.sift__field input {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  outline: none;
+}
+
+.sift__field input::placeholder {
+  color: var(--ink-faint);
+}
+
+.sift__field button {
+  display: grid;
+  place-items: center;
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: 50%;
+  color: var(--ink-faint);
+  transition: color 0.16s ease;
+}
+
+.sift__field button:hover {
+  color: var(--ink);
+}
+
+.sift__hits {
+  max-block-size: 42vh;
+  overflow-y: auto;
+  border-block-start: 1px solid var(--hair);
+  padding: 4px;
+}
+
+.sift__hit {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  inline-size: 100%;
+  padding: 8px 11px;
+  border-radius: var(--radius-tight);
+  text-align: start;
+  transition: background 0.16s ease;
+}
+
+.sift__hit:hover {
+  background: var(--veil-high);
+}
+
+/* Walking the history back takes a moment; say so on the row that caused it. */
+.sift__hit[data-going] {
+  opacity: 0.5;
+}
+
+.sift__said {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.sift__hit time {
+  flex: 0 0 auto;
+  font-size: var(--text-label);
+  color: var(--ink-faint);
+}
+
+.sift__note {
+  padding: 14px;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--ink-faint);
+}
+
+/*
+ * The message a search landed on. A flash, not a mark: it answers "which one"
+ * and then gets out of the way, because a highlight that stays is a highlight
+ * one has to dismiss.
+ */
+.line[data-found] {
+  animation: found 1.6s ease-out;
+}
+
+@keyframes found {
+  0%,
+  55% {
+    background: var(--accent-soft);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line[data-found] {
+    animation-duration: 0.01ms;
+  }
 }

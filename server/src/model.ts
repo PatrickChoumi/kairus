@@ -1181,10 +1181,26 @@ function toMatchQuery(query: string): string | null {
     .join(' AND ')
 }
 
-export function searchMessages(viewerId: string, query: string, limit = 12): SearchHit[] {
+/**
+ * Searching the history.
+ *
+ * `within` narrows it to one conversation. Looking for something one *knows*
+ * was said here is a different act from looking for it anywhere: the whole
+ * conversation is the context, so the results want to be more numerous and
+ * are worth reading in date order rather than by relevance.
+ */
+export function searchMessages(
+  viewerId: string,
+  query: string,
+  limit = 12,
+  within?: string,
+): SearchHit[] {
+  // A conversation one is not in must not be searchable, even by naming it.
+  if (within && !isParticipant(within, viewerId)) return []
+
   const rows = hasFullTextSearch
-    ? searchIndexed(viewerId, query, limit)
-    : searchByScan(viewerId, query, limit)
+    ? searchIndexed(viewerId, query, limit, within)
+    : searchByScan(viewerId, query, limit, within)
 
   return rows.flatMap((row) => {
     const conversation = describeConversation(row.conversation_id, viewerId)
@@ -1199,7 +1215,12 @@ export function searchMessages(viewerId: string, query: string, limit = 12): Sea
   })
 }
 
-function searchIndexed(viewerId: string, query: string, limit: number): MessageRow[] {
+function searchIndexed(
+  viewerId: string,
+  query: string,
+  limit: number,
+  within?: string,
+): MessageRow[] {
   const match = toMatchQuery(query)
   if (!match) return []
   try {
@@ -1209,22 +1230,29 @@ function searchIndexed(viewerId: string, query: string, limit: number): MessageR
          JOIN messages m ON m.rowid = f.rowid
          JOIN participants p ON p.conversation_id = m.conversation_id AND p.user_id = ?
          WHERE messages_fts MATCH ? AND m.deleted_at IS NULL AND m.created_at >= p.joined_at
+           AND (? IS NULL OR m.conversation_id = ?)
          ORDER BY m.created_at DESC LIMIT ?`,
       )
-      .all(viewerId, match, limit) as MessageRow[]
+      .all(viewerId, match, within ?? null, within ?? null, limit) as MessageRow[]
   } catch {
     // A malformed match expression must not take the endpoint down with it.
     return []
   }
 }
 
-function searchByScan(viewerId: string, query: string, limit: number): MessageRow[] {
+function searchByScan(
+  viewerId: string,
+  query: string,
+  limit: number,
+  within?: string,
+): MessageRow[] {
   return db
     .prepare(
       `SELECT m.* FROM messages m
        JOIN participants p ON p.conversation_id = m.conversation_id AND p.user_id = ?
        WHERE m.body LIKE '%' || ? || '%' AND m.deleted_at IS NULL AND m.created_at >= p.joined_at
+         AND (? IS NULL OR m.conversation_id = ?)
        ORDER BY m.created_at DESC LIMIT ?`,
     )
-    .all(viewerId, query, limit) as MessageRow[]
+    .all(viewerId, query, within ?? null, within ?? null, limit) as MessageRow[]
 }

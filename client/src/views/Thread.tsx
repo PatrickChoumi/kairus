@@ -11,6 +11,7 @@ import { Sigil } from '../ui/Sigil'
 import { Icon } from '../ui/Icon'
 import { Bubble } from './Bubble'
 import { Composer } from './Composer'
+import { Sift } from './Sift'
 import { Lightbox } from './Lightbox'
 import { Menu } from './Menu'
 import { dayLabel, sameBreath, sameDay } from '../lib/time'
@@ -24,6 +25,8 @@ type Props = {
 }
 
 const NEAR_BOTTOM = 120
+/** Far enough below the present that getting back is a drag, not a flick. */
+const FAR = 400
 
 /** What a message with no words is, in the one line the pin bar has for it. */
 function summarise(message: Message): string {
@@ -54,7 +57,6 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   const setReply = useStore((s) => s.reply)
   const setEdit = useStore((s) => s.edit)
   const retract = useStore((s) => s.retract)
-  const setCursor = useStore((s) => s.setCursor)
   const ringUp = useStore((s) => s.ringUp)
   const relay = useStore((s) => s.relay)
   const pin = useStore((s) => s.pin)
@@ -65,13 +67,29 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   const lastCount = useRef(0)
   const lastId = useRef<string | null>(null)
   const [menu, setMenu] = useState(false)
+  /*
+   * Whether the present moment is off screen. State rather than a ref written
+   * straight to the DOM: unlike the header hairline, a button that is not
+   * rendered cannot be pressed.
+   */
+  const [adrift, setAdrift] = useState(false)
   /** Which pin the bar is showing, when there is more than one. */
   const [aimedPin, setAimedPin] = useState(0)
 
   useLayoutEffect(() => {
     const el = stream.current
     if (!el) return
-    wasNearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM
+    const below = el.scrollHeight - el.scrollTop - el.clientHeight
+    wasNearBottom.current = below < NEAR_BOTTOM
+    /*
+     * Measured on every render, not only on scroll. Landing on a search
+     * result, or on the line where reading stopped, puts the present moment
+     * far below without a scroll event ever firing — and a button that only
+     * appears once you scroll is missing exactly when it is most wanted.
+     * Set only on a change, or this would render itself in a circle.
+     */
+    const far = below > FAR
+    setAdrift((was) => (was === far ? was : far))
   })
 
   // Arriving in a thread puts you at the present moment, with no scroll animation.
@@ -101,6 +119,25 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
   }, [messages])
 
   const head = useRef<HTMLElement>(null)
+
+  /*
+   * Where "new" began.
+   *
+   * The count cannot come from the conversation: entering marks it read, so
+   * it is already zero by the time this renders. The store keeps what was
+   * waiting at the moment of entering, and the boundary is derived from it —
+   * derived rather than stored, so it settles by itself as the history
+   * finishes loading underneath.
+   */
+  const waiting = useStore((s) => s.fresh[conversation.id] ?? 0)
+  const boundary =
+    waiting > 0
+      ? (messages.filter((m) => m.senderId !== me?.id).slice(-waiting)[0]?.id ?? null)
+      : null
+
+  /** Searching inside this conversation, as opposed to everywhere. */
+  const [sifting, setSifting] = useState(false)
+
   const [looking, setLooking] = useState<{ attachment: Attachment; url: string } | null>(null)
   const openImage = useCallback(
     (attachment: Attachment, url: string) => setLooking({ attachment, url }),
@@ -166,7 +203,12 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
               <Icon name="phone" />
             </button>
           )}
-          <button onClick={() => setCursor(true)} aria-label="chercher" title="chercher">
+          <button
+            onClick={() => setSifting((on) => !on)}
+            aria-label="chercher dans cette conversation"
+            title="chercher ici"
+            aria-expanded={sifting}
+          >
             <Icon name="search" />
           </button>
           <button
@@ -182,6 +224,8 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
 
         {menu && <Menu conversation={conversation} onClose={() => setMenu(false)} />}
       </header>
+
+      {sifting && <Sift conversationId={conversation.id} onClose={() => setSifting(false)} />}
 
       {shownPin && (
         <div className="pinbar">
@@ -252,6 +296,12 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
                     <span>{dayLabel(message.createdAt)}</span>
                   </div>
                 )}
+                {/* Where you had stopped reading. */}
+                {message.id === boundary && (
+                  <div className="daymark daymark--fresh" id="fresh">
+                    <span>nouveaux messages</span>
+                  </div>
+                )}
                 <Bubble
                   message={message}
                   mine={mine}
@@ -299,6 +349,29 @@ export function Thread({ conversation, onLeave, headSigil, sigilHidden }: Props)
           )}
         </div>
       </div>
+
+      {/*
+        Reading far up a long conversation, the way back to the present is a
+        long drag. The button appears only once the bottom is properly out of
+        sight — showing it at forty pixels would make it furniture.
+      */}
+      {adrift && (
+        <button
+          className="thread__present"
+          onClick={() => {
+            const el = stream.current
+            if (!el) return
+            el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+            setAdrift(false)
+          }}
+          aria-label="revenir au dernier message"
+        >
+          <Icon name="down" size={18} />
+          {conversation.unread > 0 && (
+            <span className="thread__present-count">{conversation.unread}</span>
+          )}
+        </button>
+      )}
 
       <Composer peerName={conversation.face.name} />
 

@@ -3,6 +3,7 @@ import { SPRING } from '../motion/spring'
 import { useSpringHandle } from '../motion/hooks'
 import { rubberBand, useDrag } from '../motion/gesture'
 import { clock, exact } from '../lib/time'
+import { pieces, shorten } from '../lib/links'
 import { Carried } from './Carried'
 import { Icon } from '../ui/Icon'
 import type { Attachment, Message } from '../net/types'
@@ -156,7 +157,31 @@ export function Bubble({
             {message.attachment && <Carried message={message} onOpen={onOpenImage} />}
             {message.body && (
               <p className="bubble__body" id={`m-${message.id}`}>
-                {message.body}
+                {/*
+                  The body is split, never parsed into markup: every piece is
+                  either a string React escapes or a link whose address has
+                  already been through `URL`. `noopener` is what stops the page
+                  we open from reaching back into this one, and `nofollow ugc`
+                  says plainly that a message is not an endorsement.
+                */}
+                {pieces(message.body).map((piece, index) =>
+                  piece.href ? (
+                    <a
+                      key={index}
+                      className="bubble__link"
+                      href={piece.href}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow ugc"
+                      title={piece.href}
+                      onClick={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
+                    >
+                      {shorten(piece.text)}
+                    </a>
+                  ) : (
+                    piece.text
+                  ),
+                )}
               </p>
             )}
           </>
