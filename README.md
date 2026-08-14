@@ -287,7 +287,7 @@ npm start                  # sert l'API, les WebSockets et le client compilé
 ### Tests
 
 ```bash
-npm test                   # 280 tests : 165 côté serveur, 115 côté client
+npm test                   # 312 tests : 182 côté serveur, 130 côté client
 npm run typecheck          # serveur et client
 ```
 
