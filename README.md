@@ -277,6 +277,18 @@ réseau sortant.
 
 ---
 
+## Comment c'est fait
+
+**[`ARCHITECTURE.md`](ARCHITECTURE.md)** dit ce qui est utilisé et pourquoi,
+puis reprend chaque fonctionnalité une par une : ce qu'elle fait, comment, et
+les décisions qui ne se lisent pas dans le code. Il liste aussi les pièges
+rencontrés — ceux qui coûteraient à quelqu'un d'autre le même temps.
+
+**[`DEPLOY.md`](DEPLOY.md)** est la mise en ligne : hôtes, variables, volume,
+sauvegardes, et quoi regarder quand un déploiement semble sans effet.
+
+---
+
 ## Démarrer
 
 ```bash
