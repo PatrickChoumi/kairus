@@ -92,11 +92,11 @@ test('a snapshot restores into a server that still knows everyone', async () => 
   let child: ChildProcess | null = null
 
   try {
-    const target = await takeBackup(snapshots)
+    const snapshot = await takeBackup(snapshots)
 
     // This is the whole documented procedure: put the snapshot where the
     // database lives, under the name the server expects, and start it.
-    copyFileSync(target, join(restored, 'kairus.db'))
+    copyFileSync(snapshot.database, join(restored, 'kairus.db'))
 
     const port = 4700 + Math.floor(Math.random() * 200)
     child = await boot(restored, port)

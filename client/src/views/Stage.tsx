@@ -5,6 +5,7 @@ import { Thread } from './Thread'
 import { Cursor } from './Cursor'
 import { Relay } from './Relay'
 import { Flag } from './Flag'
+import { Gallery } from './Gallery'
 import { Flight } from './Flight'
 import { SPRING, prefersReducedMotion } from '../motion/spring'
 import { useSpringTo } from '../motion/hooks'
@@ -225,6 +226,7 @@ export function Stage() {
       <Cursor />
       <Relay />
       <Flag />
+      <Gallery />
     </div>
   )
 }

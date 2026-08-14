@@ -49,6 +49,10 @@ db.exec(`
     -- What this person had started writing here, kept so another device finds it.
     draft           TEXT NOT NULL DEFAULT '',
     draft_at        INTEGER NOT NULL DEFAULT 0,
+    -- Silenced: 0 never, -1 until said otherwise, otherwise the date it ends.
+    -- Per participant, because silence is one person's decision about their own
+    -- evening and not a property of the conversation.
+    muted_until     INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (conversation_id, user_id)
   );
 
@@ -179,6 +183,8 @@ ensureColumn('messages', 'forwarded_from', 'TEXT')
 ensureColumn('messages', 'forwarded_at', 'INTEGER')
 ensureColumn('participants', 'draft', "TEXT NOT NULL DEFAULT ''")
 ensureColumn('participants', 'draft_at', 'INTEGER NOT NULL DEFAULT 0')
+// 0 = never silenced, -1 = silenced until said otherwise, otherwise a date.
+ensureColumn('participants', 'muted_until', 'INTEGER NOT NULL DEFAULT 0')
 
 /* ------------------------------------------------------------------ search */
 

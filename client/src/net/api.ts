@@ -1,4 +1,4 @@
-import type { Conversation, Message, SearchHit, User } from './types'
+import type { Conversation, Message, SearchHit, Shared, User } from './types'
 
 /** Empty in production: the server serves the client from the same origin. */
 const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
@@ -110,6 +110,23 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ conversation, handle }),
     }),
+
+  /**
+   * Silences a conversation. `minutes` absent means until said otherwise, 0
+   * means hear it again.
+   */
+  mute: (conversation: string, minutes?: number) =>
+    request<{ mutedUntil: number }>('/api/mute', {
+      method: 'POST',
+      body: JSON.stringify(minutes === undefined ? { conversation } : { conversation, minutes }),
+    }),
+
+  /** Everything ever attached in a conversation, newest first. */
+  shared: (conversation: string, kind: 'image' | 'audio' | 'file', before?: number) =>
+    request<{ shared: Shared[] }>(
+      `/api/shared?conversation=${encodeURIComponent(conversation)}&kind=${kind}` +
+        (before ? `&before=${before}` : ''),
+    ),
 
   /* -- the second factor -------------------------------------------------- */
 

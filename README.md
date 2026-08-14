@@ -97,6 +97,15 @@ eux**, à la même teinte, de sorte qu'on reconnaît le même produit.
   liste, revient dans le champ quand on rouvre la conversation, et suit d'un
   appareil à l'autre. Il part sur une pause de frappe, pas sur une touche, et
   n'arrive jamais chez la personne à qui on écrit
+- **Silence par conversation** : deux heures, ou jusqu'à nouvel ordre. Une
+  conversation en silence continue d'arriver et continue de compter ses
+  non-lus — c'est la sonnerie qui s'arrête, rien d'autre. Une durée expire
+  d'elle-même : personne n'a à se souvenir de la défaire. C'est une décision
+  personnelle, et l'autre bout n'en sait rien
+- **Fichiers partagés** : tout ce qui a été joint à une conversation, en une
+  grille, séparé en images, audio et documents. Les règles sont exactement
+  celles du fil, `joined_at` compris — une seconde façon de regarder la même
+  conversation, pas une seconde porte plus laxiste
 - Indicateur de frappe, présence, accusés de lecture, compteurs de non-lus
 - Recherche dans l'historique sur un index FTS5 ; les personnes se trouvent par
   nom d'usage exact hors de votre cercle, librement à l'intérieur
@@ -404,6 +413,8 @@ Les messages passent par le WebSocket, mais tout est aussi accessible en HTTP.
 | `GET`/`POST /api/messages`         | Lire l'historique ou déposer un message |
 | `POST /api/messages/revise`, `/retract` | Corriger ou retirer son propre message |
 | `POST /api/read`                   | Marquer comme lu                        |
+| `POST /api/mute`                   | Silencer une conversation, ou la rallumer |
+| `GET /api/shared`                  | Les fichiers d'une conversation         |
 | `GET /api/people`, `/api/search`   | Chercher des personnes, des messages    |
 | `POST /api/account/passphrase`     | Changer la phrase secrète               |
 | `POST /api/account/recovery`       | Émettre une nouvelle phrase de secours  |
@@ -412,7 +423,7 @@ Les messages passent par le WebSocket, mais tout est aussi accessible en HTTP.
 | `POST /api/blocks/remove`          | Débloquer                               |
 | `POST /api/files`, `GET /api/files/:id` | Envoyer un fichier, le récupérer   |
 | `GET`/`POST /api/push`             | Clé publique, abonner ou désabonner un appareil |
-| `GET /api/health`                  | Sonde de disponibilité                  |
+| `GET /api/health`                  | Sonde de disponibilité, et l'identifiant du build |
 | `GET /api/metrics`                 | Compteurs, derrière `METRICS_TOKEN`     |
 
 ### Le protocole WebSocket

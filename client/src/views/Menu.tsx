@@ -20,6 +20,8 @@ export function Menu({ conversation, onClose }: Props) {
   const block = useStore((s) => s.block)
   const flag = useStore((s) => s.flag)
   const leaveGroup = useStore((s) => s.leaveGroup)
+  const hush = useStore((s) => s.hush)
+  const browse = useStore((s) => s.browse)
 
   useEffect(() => {
     const away = (event: PointerEvent) => {
@@ -51,12 +53,38 @@ export function Menu({ conversation, onClose }: Props) {
   }
 
   const peer = conversation.members[0]
+  // -1 is until said otherwise; a date in the future is a silence still running.
+  const muted = conversation.mutedUntil === -1 || conversation.mutedUntil > Date.now()
 
   return (
     <div className="menu" ref={panel} role="menu">
       <button role="menuitem" onClick={act(toggleReading)}>
         {reading ? 'quitter le mode lecture' : 'mode lecture'}
       </button>
+
+      <button role="menuitem" onClick={act(() => browse(conversation.id))}>
+        fichiers partagés
+      </button>
+
+      {/*
+        Silence is offered in the two shapes people actually want: "not for the
+        next couple of hours" and "not any more". A list of six durations is a
+        decision to make when all one wanted was quiet.
+      */}
+      {muted ? (
+        <button role="menuitem" onClick={act(() => void hush(conversation.id, 0))}>
+          réactiver les notifications
+        </button>
+      ) : (
+        <>
+          <button role="menuitem" onClick={act(() => void hush(conversation.id, 120))}>
+            silence pendant 2 heures
+          </button>
+          <button role="menuitem" onClick={act(() => void hush(conversation.id))}>
+            silence jusqu’à nouvel ordre
+          </button>
+        </>
+      )}
 
       {conversation.kind === 'group' ? (
         <>

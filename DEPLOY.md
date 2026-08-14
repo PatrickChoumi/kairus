@@ -318,10 +318,17 @@ Ce qui mérite une alerte : `backup.failed`, `push.failed` en rafale,
 Le volume porte la base **et** les pièces jointes (`<DATA_DIR>/files`). C'est
 le seul endroit où vivent vos données.
 
-> Les instantanés couvrent la base, **pas les fichiers**. Pour une sauvegarde
-> complète, copiez aussi `<DATA_DIR>/files` — un `docker cp` ou un `rsync` du
-> volume entier suffit.
- La base est en mode WAL,
+Un instantané couvre **les deux** : la base, et les fichiers qu'elle désigne.
+Sauvegarder la base seule produit quelque chose qui *a l'air* restauré et ne
+l'est pas — chaque photo et chaque vocal un rectangle gris. Les fichiers ne
+sont jamais réécrits une fois déposés, donc l'instantané prend des **liens
+durs** : la deuxième sauvegarde d'un gigaoctet de photos coûte quelques
+kilo-octets, et supprimer un vieil instantané ne libère la place que quand
+plus personne ne tient le fichier. Si le dossier de sauvegarde est sur un
+autre point de montage — le bon cas — les liens sont impossibles et les octets
+sont copiés : plus lent, tout aussi juste.
+
+La base est en mode WAL,
 donc **copier `kairus.db` seul donne une copie potentiellement incohérente** —
 les écritures récentes sont dans `kairus.db-wal`. Le serveur utilise l'API de
 sauvegarde de SQLite, qui prend un instantané cohérent d'une base vivante.
@@ -337,8 +344,15 @@ BACKUP_EVERY_HOURS=24    # facultatif
 BACKUP_KEEP=7            # facultatif
 ```
 
-Le journal le dit à chaque fois :
-`[kairus] backup /data/backups/kairus-2026-07-29T17-30-57.db (7 kept)`.
+Le journal le dit à chaque fois, avec le nombre de fichiers emportés :
+`{"event":"backup","target":"/data/backups/kairus-2026-07-29T17-30-57.db","blobs":412,"kept":7}`.
+
+Chaque instantané est donc **une paire** :
+
+```
+kairus-2026-07-29T17-30-57.db       ← la base
+kairus-2026-07-29T17-30-57.files/   ← ce qu'elle désigne
+```
 
 **Ces instantanés vivent sur le même volume que la base.** Ils vous sauvent
 d'une corruption ou d'une fausse manœuvre, pas de la perte du volume. Sortez-en
@@ -361,11 +375,16 @@ Arrêtez le service, remettez l'instantané en place sous le nom attendu, et
 **supprimez les fichiers `-wal` et `-shm`** : ils appartiennent à l'ancienne
 base et la contrediraient.
 
+**Remettez la paire**, pas seulement la base : la base seule restaure des
+conversations pleines d'images cassées.
+
 ```bash
 docker stop kairus
 docker run --rm -v kairus-data:/data debian:stable-slim sh -c '
-  cp /data/backups/kairus-2026-07-29T17-30-57.db /data/kairus.db &&
-  rm -f /data/kairus.db-wal /data/kairus.db-shm'
+  S=/data/backups/kairus-2026-07-29T17-30-57
+  cp "$S.db" /data/kairus.db &&
+  rm -f /data/kairus.db-wal /data/kairus.db-shm &&
+  rm -rf /data/files && cp -a "$S.files" /data/files'
 docker start kairus
 ```
 

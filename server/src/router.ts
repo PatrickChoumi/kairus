@@ -32,6 +32,7 @@ import {
   isParticipant,
   listBlocked,
   listPins,
+  listShared,
   MAX_PINS,
   participantIds,
   listConversations,
@@ -50,6 +51,7 @@ import {
   saveDraft,
   searchMessages,
   searchUsers,
+  setMuted,
   tokenVersionOf,
   unblockUser,
   unpinMessage,
@@ -380,6 +382,42 @@ const authed: Record<string, Handler> = {
     const at = saveDraft(conversationId, userId, text)
     hub.broadcastDraft(userId, conversationId, text.slice(0, 4000), at)
     return { at }
+  },
+
+  /**
+   * Silencing a conversation. `until` is a number of minutes, 0 to hear it
+   * again, or absent for until said otherwise. Nothing is broadcast: the
+   * others have no business knowing, and one's own other devices pick it up
+   * with the conversation list.
+   */
+  'POST /api/mute': ({ userId, body }) => {
+    const conversationId = field(body, 'conversation')
+    if (!isParticipant(conversationId, userId)) {
+      throw new HttpError(404, 'cette conversation n’existe pas')
+    }
+    const minutes = (body as { minutes?: unknown } | null)?.minutes
+    const until =
+      typeof minutes !== 'number' || !Number.isFinite(minutes)
+        ? -1
+        : minutes <= 0
+          ? 0
+          : Date.now() + Math.min(minutes, 60 * 24 * 365) * 60_000
+    return { mutedUntil: setMuted(conversationId, userId, until) }
+  },
+
+  /**
+   * What was ever attached here. A second way of looking at the same
+   * conversation — so the same rules, `joined_at` included.
+   */
+  'GET /api/shared': ({ url, userId }) => {
+    const conversationId = url.searchParams.get('conversation') ?? ''
+    if (!isParticipant(conversationId, userId)) {
+      throw new HttpError(404, 'cette conversation n’existe pas')
+    }
+    const asked = url.searchParams.get('kind')
+    const kind = asked === 'audio' || asked === 'file' ? asked : 'image'
+    const before = Number(url.searchParams.get('before') ?? '') || Number.MAX_SAFE_INTEGER
+    return { shared: listShared(conversationId, userId, kind, before) }
   },
 
   'POST /api/read': ({ userId, body }) => {

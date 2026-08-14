@@ -58,6 +58,17 @@ export type Conversation = {
   pins: Message[]
   /** What you had started writing here, from whichever device you left it on. */
   draft: string
+  /**
+   * Silenced until this date. 0 is never, -1 is until said otherwise. Yours
+   * alone — the others are never told.
+   */
+  mutedUntil: number
+}
+
+/** One attachment, with the message that carried it. */
+export type Shared = {
+  message: Message
+  attachment: Attachment
 }
 
 export type SearchHit = {

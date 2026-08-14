@@ -58,6 +58,7 @@ const conversation = (over = {}) => ({
   readAt: 0,
   pins: [],
   draft: '',
+  mutedUntil: 0,
   ...over,
 })
 

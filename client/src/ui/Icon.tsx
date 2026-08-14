@@ -35,6 +35,7 @@ export type IconName =
   | 'forward'
   | 'flag'
   | 'download'
+  | 'images'
   | 'muted'
   | 'sound'
 
@@ -159,6 +160,15 @@ const shapes: Record<IconName, ReactNode> = {
       <path d="M12 3.8v11" />
       <path d="m7.6 10.6 4.4 4.4 4.4-4.4" />
       <path d="M4.6 19.6h14.8" />
+    </>
+  ),
+  // Two frames overlapping, the way photographs sit in a pile.
+  images: (
+    <>
+      <path d="M8.2 3.6h12.2v12.2H8.2z" />
+      <path d="M8.2 8.4H3.6v12h12v-4.6" />
+      <path d="m8.2 13 3.6-3.4 3 2.8 2.4-2.2 3.2 3" />
+      <circle cx="12.4" cy="7.2" r="1.2" />
     </>
   ),
   muted: (

@@ -76,9 +76,9 @@ test('a backup is a consistent, openable copy', async () => {
 
   const directory = mkdtempSync(join(tmpdir(), 'kairus-backup-'))
   try {
-    const target = await takeBackup(directory)
+    const snapshot = await takeBackup(directory)
     const Database = (await import('better-sqlite3')).default
-    const copy = new Database(target, { readonly: true })
+    const copy = new Database(snapshot.database, { readonly: true })
     const users = copy.prepare(`SELECT count(*) AS n FROM users`).get() as { n: number }
     const messages = copy.prepare(`SELECT count(*) AS n FROM messages`).get() as { n: number }
     copy.close()
@@ -97,11 +97,11 @@ test('pruning keeps the newest snapshots and removes the rest', async () => {
       // The names carry a second-resolution stamp; keep them distinguishable.
       await new Promise((resolve) => setTimeout(resolve, 1100))
     }
-    assert.equal(readdirSync(directory).length, 4)
+    assert.equal(readdirSync(directory).filter((n) => n.endsWith('.db')).length, 4)
 
     const kept = prune(directory, 2)
     assert.equal(kept.length, 2)
-    assert.equal(readdirSync(directory).length, 2)
+    assert.equal(readdirSync(directory).filter((n) => n.endsWith('.db')).length, 2)
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }

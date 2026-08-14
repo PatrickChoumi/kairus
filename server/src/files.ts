@@ -65,6 +65,9 @@ const root =
     : join(env.dataDir, 'files'))
 mkdirSync(root, { recursive: true })
 
+/** Where the bytes live, for whoever has to back them up. */
+export const filesRoot = (): string => root
+
 const pathOf = (id: string) => join(root, id)
 
 export type Attachment = {

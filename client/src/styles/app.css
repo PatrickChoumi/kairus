@@ -517,6 +517,22 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * A silenced conversation still counts what arrives — it just stops shouting
+ * about it. The badge keeps its shape and loses its colour, so the number is
+ * still legible without pulling the eye across the list.
+ */
+.row__unread[data-hushed] {
+  background: var(--veil-high);
+  color: var(--ink-faint);
+}
+
+.row__hushed {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--ink-faint);
+}
+
 .row__last {
   flex: 1;
   min-inline-size: 0;
@@ -2059,4 +2075,112 @@ kbd {
   .rail__head {
     align-items: flex-start;
   }
+}
+
+/* ---------------------------------------------------------------- gallery */
+
+/*
+ * The files of a conversation. The grid shows the pictures and nothing else:
+ * what one is doing here is recognising an image, and a name under each tile
+ * would only get in the way of that. The details are one tap further in.
+ */
+
+.gallery {
+  inline-size: min(560px, 92vw);
+  max-block-size: min(660px, 84vh);
+}
+
+.gallery__kinds {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px 10px;
+  border-block-end: 1px solid var(--hair);
+}
+
+.gallery__kinds button {
+  padding: 5px 11px;
+  border-radius: 99px;
+  font-size: var(--text-label);
+  color: var(--ink-faint);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.gallery__kinds button:hover {
+  color: var(--ink);
+}
+
+.gallery__kinds button[data-picked] {
+  background: var(--veil-high);
+  color: var(--ink);
+}
+
+.gallery__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 3px;
+  padding: 3px;
+  overflow-y: auto;
+}
+
+.gallery__tile {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-tight);
+  /* Something is there while the bytes are on their way, so the grid does not
+     reflow under the eye as each tile arrives. */
+  background: var(--veil-high);
+}
+
+.gallery__tile img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.gallery__tile:hover img {
+  transform: scale(1.04);
+}
+
+.gallery__tile[data-failed] {
+  opacity: 0.4;
+}
+
+.gallery__list {
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.gallery__row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  inline-size: 100%;
+  padding: 9px 11px;
+  border-radius: var(--radius-tight);
+  text-align: start;
+  color: var(--ink-soft);
+  transition: background 0.2s ease;
+}
+
+.gallery__row:hover {
+  background: var(--veil-high);
+  color: var(--ink);
+}
+
+.gallery__name {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.gallery__size {
+  flex: 0 0 auto;
+  font-size: var(--text-label);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
 }

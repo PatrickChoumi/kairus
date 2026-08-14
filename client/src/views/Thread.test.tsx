@@ -60,6 +60,7 @@ const conversation = (over: Partial<Conversation> = {}): Conversation => ({
   readAt: 0,
   pins: [],
   draft: '',
+  mutedUntil: 0,
   ...over,
 })
 

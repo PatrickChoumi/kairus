@@ -5,6 +5,14 @@ import { Icon } from '../ui/Icon'
 import { stamp } from '../lib/time'
 import type { Conversation } from '../net/types'
 
+/**
+ * Whether this conversation has been silenced. -1 is until said otherwise; a
+ * date is a silence that lapses on its own, so it has to be compared to now
+ * rather than merely tested.
+ */
+const silenced = (conversation: Conversation): boolean =>
+  conversation.mutedUntil === -1 || conversation.mutedUntil > Date.now()
+
 /** What a message with no words is, in the one line the list has for it. */
 function summarise(message: NonNullable<Conversation['lastMessage']>): string {
   if (message.body) return message.body
@@ -177,8 +185,15 @@ export function Rail({ onOpen, dimmed }: Props) {
                           <span className="row__empty">rien encore</span>
                         )}
                       </span>
+                      {silenced(conversation) && (
+                        <span className="row__hushed" aria-label="notifications coupées">
+                          <Icon name="muted" size={13} />
+                        </span>
+                      )}
                       {conversation.unread > 0 && (
-                        <span className="row__unread">{conversation.unread}</span>
+                        <span className="row__unread" data-hushed={silenced(conversation) || undefined}>
+                          {conversation.unread}
+                        </span>
                       )}
                     </span>
                   </span>

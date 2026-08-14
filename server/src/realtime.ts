@@ -11,6 +11,7 @@ import {
   findUser,
   forwardMessage,
   isBlocked,
+  isMuted,
   isParticipant,
   listConversations,
   listPins,
@@ -206,6 +207,10 @@ class Hub {
     for (const userId of participantIds(message.conversationId)) {
       if (userId === message.senderId || this.isOnline(userId)) continue
       if (isBlocked(userId, message.senderId)) continue
+      // Silenced: the message still arrives and still counts as unread. What
+      // it does not do is ring in someone's pocket, which is the only thing
+      // they asked to stop.
+      if (isMuted(message.conversationId, userId)) continue
       const said = message.body || wordless(message.attachment?.mime)
       try {
         // In a group the title is the notification; who spoke goes in the body.

@@ -5,7 +5,7 @@ import { disablePush, enablePush, pushState, type PushState } from '../net/push'
 import { forgetAttachment, forgetAttachments } from '../net/blobs'
 import { caller, canCall, type CallSnapshot } from '../net/call'
 import { prepare, upload, UploadError, type Prepared } from '../net/files'
-import type { Conversation, Message, User } from '../net/types'
+import type { Conversation, Message, Shared, User } from '../net/types'
 
 export type Theme = 'dark' | 'light'
 
@@ -48,7 +48,17 @@ type State = {
   factor: boolean
   /** The secret being set up, while it is being set up. */
   arming: { secret: string; readable: string; uri: string } | null
+
+  /** Which conversation's files are being looked at, and which sort. */
+  gallery: { conversationId: string; kind: SharedKind } | null
+  /** What came back, newest first. */
+  shared: Shared[]
+  /** True while they are on their way. */
+  browsing: boolean
 }
+
+/** Photographs, voices, and everything else — the three ways one looks. */
+export type SharedKind = 'image' | 'audio' | 'file'
 
 type Actions = {
   boot: () => Promise<void>
@@ -87,6 +97,12 @@ type Actions = {
   expel: (conversationId: string, handle: string) => Promise<void>
   /** Saves what is being written so another device finds it. */
   sketch: (conversationId: string, body: string) => void
+
+  /** Silences a conversation, or lifts it. Minutes absent: until said otherwise. */
+  hush: (conversationId: string, minutes?: number) => Promise<void>
+
+  /** Opens the gallery on a conversation, or closes it. */
+  browse: (conversationId: string | null, kind?: SharedKind) => void
 
   refreshPush: () => Promise<void>
   togglePush: () => Promise<void>
@@ -883,6 +899,58 @@ export const useStore = create<State & Actions>((set, get) => {
       } catch (error) {
         set({ notice: error instanceof ApiError ? error.message : 'impossible de retirer' })
       }
+    },
+
+    /**
+     * Silencing. It stops the notification and nothing else: the messages keep
+     * arriving and the unread count keeps counting, because muting a
+     * conversation is a decision about being interrupted, not about the people
+     * in it. The conversation list is updated at once — a silence that takes a
+     * round trip to show feels broken.
+     */
+    async hush(conversationId, minutes) {
+      const previous = get().conversations.find((c) => c.id === conversationId)?.mutedUntil ?? 0
+      const guess = minutes === undefined ? -1 : minutes <= 0 ? 0 : Date.now() + minutes * 60_000
+      const put = (value: number) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === conversationId ? { ...c, mutedUntil: value } : c,
+          ),
+        }))
+      put(guess)
+      try {
+        const { mutedUntil } = await api.mute(conversationId, minutes)
+        put(mutedUntil)
+      } catch {
+        put(previous)
+        set({ notice: 'impossible de changer les notifications' })
+      }
+    },
+
+    gallery: null,
+    shared: [],
+    browsing: false,
+
+    /**
+     * Opens the gallery. The list is fetched fresh each time rather than kept
+     * in step with the thread: it is looked at rarely, and a stale gallery
+     * would be a worse bargain than a half-second wait.
+     */
+    browse(conversationId, kind = 'image') {
+      if (!conversationId) {
+        set({ gallery: null, shared: [], browsing: false })
+        return
+      }
+      set({ gallery: { conversationId, kind }, shared: [], browsing: true })
+      void api
+        .shared(conversationId, kind)
+        .then(({ shared }) => {
+          const still = get().gallery
+          // Somebody closed it, or asked for something else, while we fetched.
+          if (!still || still.conversationId !== conversationId || still.kind !== kind) return
+          set({ shared, browsing: false })
+        })
+        .catch(() => set({ browsing: false, notice: 'impossible de charger les fichiers' }))
     },
 
     sketch(conversationId, body) {

@@ -49,6 +49,11 @@ export type Conversation = {
   pins: Message[]
   /** What you had started writing here, from whichever device you left it on. */
   draft: string
+  /**
+   * Silenced until this date. 0 is never, -1 is until said otherwise. Yours
+   * alone: the others are not told, and never see that you stopped listening.
+   */
+  mutedUntil: number
 }
 
 type UserRow = User & {
@@ -717,11 +722,11 @@ export function describeConversation(id: string, viewerId: string): Conversation
 
   const mine = db
     .prepare(
-      `SELECT last_read_at, joined_at, draft FROM participants
+      `SELECT last_read_at, joined_at, draft, muted_until FROM participants
        WHERE conversation_id = ? AND user_id = ?`,
     )
     .get(id, viewerId) as
-    | { last_read_at: number; joined_at: number; draft: string }
+    | { last_read_at: number; joined_at: number; draft: string; muted_until: number }
     | undefined
   const since = mine?.joined_at ?? 0
 
@@ -759,6 +764,7 @@ export function describeConversation(id: string, viewerId: string): Conversation
     readAt: others.at ?? mine?.last_read_at ?? 0,
     pins: listPins(id, viewerId),
     draft: mine?.draft ?? '',
+    mutedUntil: mine?.muted_until ?? 0,
   }
 }
 
@@ -1051,6 +1057,99 @@ export const draftOf = (conversationId: string, userId: string): string =>
   (db
     .prepare(`SELECT draft FROM participants WHERE conversation_id = ? AND user_id = ?`)
     .get(conversationId, userId) as { draft: string } | undefined)?.draft ?? ''
+
+/* ----------------------------------------------------------------- silence */
+
+/**
+ * Silencing a conversation.
+ *
+ * It stops the notification, and nothing else: the messages still arrive, the
+ * unread count still counts, the conversation stays where it is. Muting is not
+ * a soft way of leaving — it is a decision about being interrupted, and it is
+ * yours alone. Nobody on the other side is told, because "he muted me" is a
+ * fact that only ever makes things worse.
+ *
+ * `until` is a date, or -1 for until said otherwise, or 0 to hear it again.
+ */
+const YEAR_MS = 365 * 24 * 3_600_000
+
+export function setMuted(conversationId: string, userId: string, until: number): number {
+  const value = until > 0 ? Math.min(until, Date.now() + YEAR_MS) : until < 0 ? -1 : 0
+  db.prepare(
+    `UPDATE participants SET muted_until = ? WHERE conversation_id = ? AND user_id = ?`,
+  ).run(value, conversationId, userId)
+  return value
+}
+
+/**
+ * Whether this person is to be left alone about this conversation, right now.
+ * A silence with an end date lapses on its own — nobody has to remember to
+ * undo it, which is the whole point of choosing an hour rather than forever.
+ */
+export function isMuted(conversationId: string, userId: string, now = Date.now()): boolean {
+  const row = db
+    .prepare(`SELECT muted_until FROM participants WHERE conversation_id = ? AND user_id = ?`)
+    .get(conversationId, userId) as { muted_until: number } | undefined
+  if (!row) return false
+  if (row.muted_until === 0) return false
+  if (row.muted_until < 0) return true
+  return row.muted_until > now
+}
+
+/* ------------------------------------------------------------------ shared */
+
+export type SharedFile = {
+  message: Message
+  attachment: Attachment
+}
+
+/**
+ * Everything that was ever attached in a conversation, newest first.
+ *
+ * Scrolling a year of conversation to find a photograph is the kind of small
+ * misery that makes people say an application is unusable, and the data is
+ * already there. The reader's `joined_at` applies exactly as it does to the
+ * messages themselves — this is a second way of looking at the same
+ * conversation, not a second, laxer door into it.
+ */
+export function listShared(
+  conversationId: string,
+  viewerId: string,
+  kind: 'image' | 'audio' | 'file',
+  before = Number.MAX_SAFE_INTEGER,
+  limit = 40,
+): SharedFile[] {
+  if (!isParticipant(conversationId, viewerId)) return []
+  const since = joinedAt(conversationId, viewerId)
+
+  // Voice messages are audio but not "shared audio" in the sense anyone means
+  // when they go looking: they are speech, and they live in the thread.
+  const clause =
+    kind === 'image'
+      ? `a.mime LIKE 'image/%'`
+      : kind === 'audio'
+        ? `a.mime LIKE 'audio/%'`
+        : `a.mime NOT LIKE 'image/%' AND a.mime NOT LIKE 'audio/%'`
+
+  const rows = db
+    .prepare(
+      `SELECT m.* FROM messages m
+       JOIN attachments a ON a.message_id = m.id
+       WHERE m.conversation_id = ? AND m.deleted_at IS NULL
+         AND m.created_at >= ? AND m.created_at < ?
+         AND ${clause}
+       ORDER BY m.created_at DESC
+       LIMIT ?`,
+    )
+    .all(conversationId, since, before, Math.min(limit, 100)) as MessageRow[]
+
+  const files = attachmentsOf(rows.map((row) => row.id))
+  return rows.flatMap((row) => {
+    const attachment = files.get(row.id)
+    if (!attachment) return []
+    return [{ message: toMessage(row, attachment, originOf(row)), attachment }]
+  })
+}
 
 export function markRead(conversationId: string, userId: string, at: number): number {
   const stamp = Math.min(at, Date.now())

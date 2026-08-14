@@ -17,6 +17,17 @@ RUN npm ci --prefix server && npm ci --prefix client
 COPY server server
 COPY client client
 
+# The identifier reported by /api/health. `.dockerignore` leaves .git out, so
+# the build cannot read the commit itself; hosts that pass one make the answer
+# directly comparable to `git log`. Without it the client falls back to a hash
+# of what it emitted, which still changes whenever the application does.
+ARG RAILWAY_GIT_COMMIT_SHA=""
+ARG SOURCE_COMMIT=""
+ARG GITHUB_SHA=""
+ENV RAILWAY_GIT_COMMIT_SHA=$RAILWAY_GIT_COMMIT_SHA \
+    SOURCE_COMMIT=$SOURCE_COMMIT \
+    GITHUB_SHA=$GITHUB_SHA
+
 RUN npm run build --prefix client \
   && npm run build --prefix server \
   && npm prune --omit=dev --prefix server
